@@ -54,8 +54,8 @@ export default function LoginPage() {
 
         {/* Pasamos triggerToast como propiedad a cada uno de los submódulos */}
         {view === 'login' && <LoginForm setView={setView} triggerToast={triggerToast} />}
-        {view === 'register' && <RegisterForm setView={setView} />}
-        {view === 'reset' && <ResetPasswordForm setView={setView} />}
+        {view === 'register' && <RegisterForm setView={setView} triggerToast={triggerToast}/>}
+        {view === 'reset' && <ResetPasswordForm setView={setView} triggerToast={triggerToast}/>}
 
       </div>
     </main>
