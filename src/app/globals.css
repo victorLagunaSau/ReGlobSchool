@@ -1,0 +1,136 @@
+@import "tailwindcss";
+
+/* ==========================================================================
+   CONFIGURACIÓN DE TEMA EXCLUSIVA PARA TAILWIND v4
+   ========================================================================== */
+@theme {
+  /* --- ENTORNOS CLAROS PREMIUM (Main Workspace & Cards) --- */
+  --color-background: hsl(210 40% 98%);
+  --color-foreground: hsl(222 47% 11%);
+
+  --color-card: hsl(210 40% 99%);
+  --color-card-foreground: hsl(222 47% 11%);
+  --color-card-border: hsl(214.3 31.8% 91.4%);
+
+  /* --- ENTORNOS OSCUROS INSTITUCIONALES (Login & Sidebar) --- */
+  --color-dark-bg: hsl(222 47% 7%);
+  --color-dark-surface: hsl(222 47% 11%);
+  --color-dark-border: hsl(217.2 32.6% 17.5%);
+  --color-dark-text: hsl(210 40% 98%);
+  --color-dark-text-muted: hsl(215 20.2% 65.1%);
+
+  /* --- PALETA DE COLORES DE ACCIÓN --- */
+  --color-primary: hsl(221 83% 53%);
+  --color-primary-hover: hsl(221 83% 45%);
+  --color-primary-light: hsl(221 83% 95%);
+
+  --color-secondary: hsl(217 19% 27%);
+  --color-secondary-light: hsl(210 40% 96.1%);
+
+  /* --- GAMA DE ALERTAS Y ESTADOS SEMÁNTICOS --- */
+  --color-success: hsl(142 72% 29%);
+  --color-success-light: hsl(142 72% 95%);
+
+  --color-error: hsl(0 84% 60%);
+  --color-error-light: hsl(0 84% 97%);
+
+  --color-warning: hsl(38 92% 50%);
+  --color-warning-light: hsl(38 92% 95%);
+
+  --color-info: hsl(199 89% 48%);
+  --color-info-light: hsl(199 89% 95%);
+
+  /* --- INTERFAZ GENERAL --- */
+  --radius-custom: 1rem;
+}
+
+/* ==========================================================================
+   1. TIPOGRAFÍA Y ENCABEZADOS SEMÁNTICOS
+   ========================================================================== */
+@utility h1-title {
+  @apply text-3xl font-black tracking-tight text-slate-950;
+}
+
+@utility h2-subtitle {
+  @apply text-xl font-bold tracking-tight text-slate-900;
+}
+
+@utility header-tag {
+  @apply text-xs font-semibold uppercase tracking-widest text-primary/80;
+}
+
+@utility text-body {
+  @apply text-base text-slate-600 leading-relaxed;
+}
+
+@utility text-muted {
+  @apply text-sm text-slate-400;
+}
+
+/* ==========================================================================
+   2. ESTRUCTURAS DE PANELES Y NAVEGACIÓN
+   ========================================================================== */
+@utility sidebar-container {
+  @apply w-66 bg-dark-bg border-r border-dark-border flex flex-col justify-between fixed h-full z-30 transition-all duration-300;
+}
+
+@utility sidebar-nav-item {
+  @apply flex items-center gap-4 px-3 py-2.5 rounded-custom text-sm font-medium text-dark-text-muted hover:bg-dark-surface hover:text-dark-text transition-all duration-200;
+}
+
+@utility sidebar-nav-item-active {
+  @apply flex items-center gap-4 px-3 py-2.5 rounded-custom text-sm font-medium bg-primary text-white shadow-md shadow-primary/20 transition-all duration-200;
+}
+
+@utility sidebar-icon-box {
+  @apply w-10 h-10 flex items-center justify-center rounded-xl bg-dark-surface border border-dark-border text-dark-text-muted transition-all duration-200;
+}
+
+@utility sidebar-icon-box-active {
+  @apply w-10 h-10 flex items-center justify-center rounded-xl bg-white/10 text-white transition-all duration-200;
+}
+
+@utility topbar-container {
+  @apply h-16 bg-card/80 backdrop-blur-md border-b border-card-border flex items-center justify-between px-8 sticky top-0 z-20;
+}
+
+@utility footer-container {
+  @apply py-4 border-t border-card-border bg-card flex flex-col items-center justify-between px-8 text-xs text-slate-400 gap-2 mt-auto;
+}
+
+/* ==========================================================================
+   3. EFECTOS ESPECIALES Y GRADIENTES
+   ========================================================================== */
+@utility gradient-light-mesh {
+  @apply bg-gradient-to-br from-white via-primary-light to-secondary-light;
+}
+
+@utility gradient-dark-mesh {
+  @apply bg-gradient-to-tr from-dark-bg via-dark-surface to-dark-bg;
+}
+
+@utility glow-effect {
+  @apply shadow-2xl shadow-primary/5 border border-primary/10;
+}
+
+/* ==========================================================================
+   4. SISTEMA DE ANIMACIONES INTERNAS
+   ========================================================================== */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@utility animate-fade-in-up {
+  animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+* {
+  @apply transition-shadow duration-200;
+}
