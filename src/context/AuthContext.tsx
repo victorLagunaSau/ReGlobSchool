@@ -27,10 +27,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (currentUser) {
         // Al estar logueado, creamos la cookie para el Middleware del servidor
-        document.cookie = "regoschol_session=true; path=/; max-age=86400";
+        document.cookie = "regoschol_session=true; path=/; max-age=86400; SameSite=Lax";
       } else {
         // Si no hay usuario, destruimos la cookie de inmediato
-        document.cookie = "regoschol_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+        document.cookie = "regoschol_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax";
       }
 
       setLoading(false);
@@ -40,13 +40,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = async () => {
-    await signOut(auth);
-    window.location.href = '/login';
+    try {
+      await signOut(auth);
+      // Borramos la cookie explícitamente en el logout
+      document.cookie = "regoschol_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax";
+    } catch (error) {
+      console.error("Error al cerrar sesión:", error);
+    }
   };
 
   return (
     <AuthContext.Provider value={{ user, loading, logout }}>
-      {!loading && children}
+      {/*
+        Permitimos que renderice los hijos siempre.
+        Ahora el control de "pantalla de carga" lo maneja individualmente cada página o layout,
+        evitando romper la hidratación de Next.js y previniendo bloqueos del middleware en la raíz.
+      */}
+      {children}
     </AuthContext.Provider>
   );
 }

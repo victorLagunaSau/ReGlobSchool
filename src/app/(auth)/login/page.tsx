@@ -1,16 +1,21 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from '../../../lib/firebase'; // ◄ Asegúrate de que esta ruta apunte correctamente a tu config de Firebase
 import logoImg from '../../../../public/assets/logos/logo.png';
 import LoginForm from './LoginForm';
 import RegisterForm from './RegisterForm';
 import ResetPasswordForm from './ResetPasswordForm';
-import Toast from '../../../components/ui/Toast'; // ◄ Importación con la ruta correcta
+import Toast from '../../../components/ui/Toast';
 
 export type AuthView = 'login' | 'register' | 'reset';
 
 export default function LoginPage() {
   const [view, setView] = useState<AuthView>('login');
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
   // Control del Toast administrado desde el nivel superior de la pantalla
   const [toastOpen, setToastOpen] = useState(false);
@@ -20,10 +25,32 @@ export default function LoginPage() {
     variant: 'success' | 'error' | 'warning' | 'info';
   }>({ title: '', message: '', variant: 'info' });
 
+  useEffect(() => {
+    // Si el usuario ya está autenticado, lo redirigimos directo al panel
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        router.push('/dashboard');
+      } else {
+        setLoading(false);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [router]);
+
   const triggerToast = (title: string, message: string, variant: 'success' | 'error' | 'warning' | 'info') => {
     setToastConfig({ title, message, variant });
     setToastOpen(true);
   };
+
+  // Pantalla de carga limpia mientras se verifica el estado de Firebase en la entrada
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-dark-bg">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
+      </div>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-dark-bg flex flex-col items-center justify-center p-4 relative">

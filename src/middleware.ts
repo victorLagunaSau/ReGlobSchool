@@ -2,25 +2,33 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 export function middleware(request: NextRequest) {
-  // Buscamos la cookie de nuestra simulación
   const hasSession = request.cookies.has('regoschol_session');
-  const isLoginPage = request.nextUrl.pathname === '/login';
+  const { pathname } = request.nextUrl;
 
-  // 1. Si NO tiene sesión y no está en el login, lo frenamos en el servidor
-  if (!hasSession && !isLoginPage) {
-    return NextResponse.redirect(new URL('/login', request.url));
-  }
+  // Definimos qué rutas son públicas (Landing y Login)
+  const isRootPage = pathname === '/';
+  const isLoginPage = pathname === '/login';
 
-  // 2. Si SÍ tiene sesión e intenta ir al login, lo regresamos al panel
-  if (hasSession && isLoginPage) {
+  // 1. Si NO tiene sesión y está intentando entrar al panel administrativo (/dashboard)
+  if (!hasSession && pathname.startsWith('/dashboard')) {
+    // Lo mandamos a la Landing pública en lugar del Login directo
     return NextResponse.redirect(new URL('/', request.url));
   }
 
-  // Si todo está en orden, lo dejamos pasar
+  // 2. Si SÍ tiene sesión e intenta ir a la Landing o al Login
+  if (hasSession && (isRootPage || isLoginPage)) {
+    // Lo redirigimos directo a su espacio de trabajo
+    return NextResponse.redirect(new URL('/dashboard', request.url));
+  }
+
   return NextResponse.next();
 }
 
-// Ojo: Esto le dice a Next.js que vigile TODO, excepto imágenes, estilos y favicons
+// Protege el dashboard y las páginas base, ignorando assets estáticos
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+  matcher: [
+    '/',
+    '/login',
+    '/dashboard/:path*'
+  ],
 };
