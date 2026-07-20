@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, GraduationCap, MapPin, LogOut, X } from 'lucide-react';
+import { LayoutDashboard, GraduationCap, MapPin, LogOut, X, Map } from 'lucide-react';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -19,6 +19,7 @@ export default function Sidebar({ isOpen, setIsOpen, onLogout }: SidebarProps) {
     { name: 'HomePanel', href: '/dashboard', icon: LayoutDashboard },
     { name: 'UNES', href: '/dashboard/unes', icon: GraduationCap },
     { name: 'Zonas', href: '/dashboard/zonas', icon: MapPin },
+    { name: 'Mapas', href: '/dashboard/maps', icon: Map }, // Nueva ruta
   ];
 
   return (
