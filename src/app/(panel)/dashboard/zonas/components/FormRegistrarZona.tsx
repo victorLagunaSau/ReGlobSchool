@@ -3,33 +3,29 @@
 import React, { useState } from 'react';
 import { collection, doc, setDoc, getDocs, query, where } from 'firebase/firestore';
 import { db } from '@/src/lib/firebase';
-import { Loader2, X, BarChart3, ShieldCheck } from 'lucide-react';
+import { Loader2, X, BarChart3 } from 'lucide-react';
 
 interface FormRegistrarZonaProps {
   isOpen: boolean;
   onClose: () => void;
   countries: Array<{ id: string; name: string }>;
-  states: Array<{ id: string; countryId: string; name: string }>;
+  states: Array<{ id: string; countryId: string; name: string; CveEstado?: number; CodEstado?: string; Estado?: string; Pais?: string }>;
 }
 
 export default function FormRegistrarZona({ isOpen, onClose, countries, states }: FormRegistrarZonaProps) {
   const [selectedCountry, setSelectedCountry] = useState('MX');
-  const [selectedState, setSelectedState] = useState('');
-  const [city, setCity] = useState('');
-  const [channel, setChannel] = useState('PR');
-
-  // Datos de Censo (INEGI)
-  const [schoolsPotential, setSchoolsPotential] = useState(0);
-  const [licensesCenso, setLicensesCenso] = useState(0);
-
-  // Métricas Operativas de la UNE y Comisión
-  const [uneMinLimit, setUneMinLimit] = useState(0);
-  const [uneLicenses, setUneLicenses] = useState(0);
-  const [averageLicensePrice, setAverageLicensePrice] = useState(450); // Inicializado en tu estándar de 450
-  const [commissionPercentage, setCommissionPercentage] = useState(30); // Inicializado en tu estándar del 30%
-
+  const [selectedState, setSelectedState] = useState(''); // Representa el stateId (Ej: MX-AGS)
   const [assignedTo, setAssignedTo] = useState('Libre');
   const [isSaving, setIsSaving] = useState(false);
+
+  // Campos de la Estructura Geopolítica y Cartográfica
+  const [cveMunicipio, setCveMunicipio] = useState('');
+  const [cveGeo, setCveGeo] = useState('');
+  const [ciudad, setCiudad] = useState('');
+
+  // 📊 Campos de Proyección Censal (Añadidos de vuelta)
+  const [schoolsPotential, setSchoolsPotential] = useState('');
+  const [licensesCenso, setLicensesCenso] = useState('');
 
   if (!isOpen) return null;
 
@@ -37,48 +33,59 @@ export default function FormRegistrarZona({ isOpen, onClose, countries, states }
 
   const handleCreateZone = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedState || !city.trim()) return alert('Por favor selecciona el estado y escribe la ciudad.');
+    if (!selectedState || !ciudad.trim() || !cveMunicipio.trim() || !cveGeo.trim()) {
+      return alert('Por favor completa todos los campos de control territorial.');
+    }
 
     setIsSaving(true);
 
     try {
+      // Obtener datos del estado padre seleccionados en Config
+      const stateObj = states.find(s => s.id === selectedState);
+
+      const cveEstadoObj = stateObj?.CveEstado !== undefined ? Number(stateObj.CveEstado) : 1;
+      const paisObj = stateObj?.Pais || stateObj?.countryId || 'México';
+      const codEstadoObj = stateObj?.CodEstado || selectedState.split('-')[1] || 'AGS';
+      const estadoObj = stateObj?.Estado || stateObj?.name || 'Aguascalientes';
+
+      // Consulta consecutiva basada únicamente en el Estado (ID limpio sin canal)
       const zonesRef = collection(db, 'zones');
-      const q = query(zonesRef, where('stateId', '==', selectedState), where('channel', '==', channel));
+      const q = query(zonesRef, where('stateId', '==', selectedState));
       const querySnapshot = await getDocs(q);
       const nextConsecutive = querySnapshot.size + 1;
       const paddedConsecutive = String(nextConsecutive).padStart(3, '0');
 
-      const zoneId = `${selectedState}-${channel}-${paddedConsecutive}`;
+      // Formato de ID limpio requerido: MX-AGS-001
+      const zoneId = `${selectedState}-${paddedConsecutive}`;
       const zoneDocRef = doc(db, 'zones', zoneId);
 
       await setDoc(zoneDocRef, {
         id: zoneId,
         countryId: selectedCountry,
         stateId: selectedState,
-        city: city.trim(),
-        channel: channel,
+        assignedTo: assignedTo,
 
-        schoolsPotential: Number(schoolsPotential),
-        licensesCenso: Number(licensesCenso),
+        // Mapeo de la Estructura Cartográfica Limpia
+        CveEstado: cveEstadoObj,
+        Pais: paisObj,
+        CodEstado: codEstadoObj,
+        Estado: estadoObj,
+        CveMunicipio: Number(cveMunicipio.trim()),
+        CVEGEO: cveGeo.trim(),
+        Ciudad: ciudad.trim(),
+        city: ciudad.trim(), // Retrocompatibilidad visual
 
-        uneMinLimit: Number(uneMinLimit),
-        uneLicenses: Number(uneLicenses),
-        averageLicensePrice: Number(averageLicensePrice),
-        commissionPercentage: Number(commissionPercentage), // Nuevo campo de incentivo
-
-        licensesSold: 0,
-        schoolsOccupied: 0,
-        assignedTo: assignedTo
+        // Datos de Censo / Proyección
+        schoolsPotential: Number(schoolsPotential) || 0, // Mapea a 'Escuelas Censo'
+        licensesCenso: Number(licensesCenso) || 0        // Mapea a 'Lic. Censo'
       });
 
-      setCity('');
-      setSchoolsPotential(0);
-      setLicensesCenso(0);
-      setUneMinLimit(0);
-      setUneLicenses(0);
-      setAverageLicensePrice(450);
-      setCommissionPercentage(30);
-      setChannel('PR');
+      // Limpieza de estados
+      setCveMunicipio('');
+      setCveGeo('');
+      setCiudad('');
+      setSchoolsPotential('');
+      setLicensesCenso('');
       setAssignedTo('Libre');
       onClose();
     } catch (error) {
@@ -95,7 +102,7 @@ export default function FormRegistrarZona({ isOpen, onClose, countries, states }
         <div className="flex justify-between items-center pb-3 border-b border-slate-100 mb-4">
           <div>
             <h2 className="text-base font-black text-slate-950 tracking-tight">Nueva Zona Comercial</h2>
-            <p className="text-[11px] text-slate-400">Configuración territorial, censal y potencial de ingresos de la UNE.</p>
+            <p className="text-[11px] text-slate-400">Configuración e integración cartográfica de control territorial y censal.</p>
           </div>
           <button onClick={onClose} disabled={isSaving} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg">
             <X size={18} />
@@ -104,6 +111,7 @@ export default function FormRegistrarZona({ isOpen, onClose, countries, states }
 
         <form onSubmit={handleCreateZone} className="space-y-4">
 
+          {/* Bloque Geográfico Padre */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-[11px] font-bold text-slate-500 mb-1">País</label>
@@ -112,7 +120,7 @@ export default function FormRegistrarZona({ isOpen, onClose, countries, states }
               </select>
             </div>
             <div>
-              <label className="block text-[11px] font-bold text-slate-500 mb-1">Estado / Depto</label>
+              <label className="block text-[11px] font-bold text-slate-500 mb-1">Estado vinculante</label>
               <select value={selectedState} onChange={(e) => setSelectedState(e.target.value)} className="w-full border border-slate-200 rounded-lg p-2 text-xs bg-white focus:outline-blue-600">
                 <option value="">Selecciona...</option>
                 {filteredStates.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -120,75 +128,60 @@ export default function FormRegistrarZona({ isOpen, onClose, countries, states }
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-[11px] font-bold text-slate-500 mb-1">Ciudad / Municipio Base</label>
-              <input type="text" value={city} onChange={(e) => setCity(e.target.value)} placeholder="Ej. Matamoros" className="w-full border border-slate-200 rounded-lg p-2 text-xs focus:outline-blue-600" />
-            </div>
-            <div>
-              <label className="block text-[11px] font-bold text-slate-500 mb-1">Segmento / Canal de Venta</label>
-              <select value={channel} onChange={(e) => setChannel(e.target.value)} className="w-full border border-slate-200 rounded-lg p-2 text-xs bg-white font-bold text-slate-800 focus:outline-blue-600">
-                <option value="PR">PR - Colegio Privado</option>
-                <option value="PU">PU - Escuela Pública</option>
-                <option value="GB">GB - Gobierno / Licitación</option>
-                <option value="PE">PE - Proyecto Especial / Organización</option>
-              </select>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-[11px] font-bold text-slate-500 mb-1">Asignado</label>
-            <input type="text" value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} className="w-full border border-slate-200 rounded-lg p-2 text-xs focus:outline-blue-600" />
-          </div>
-
-          {/* DATOS DE CENSO */}
+          {/* Bloque INEGI / Localidad */}
           <div className="border-t border-slate-100 pt-3 bg-slate-50/40 p-3 rounded-xl border border-slate-100 space-y-2">
             <div className="flex items-center gap-1.5 text-slate-700 mb-1">
               <BarChart3 size={13} className="text-slate-400" />
-              <label className="block text-[11px] font-black uppercase tracking-wider">Datos Estadísticos / Censo (INEGI)</label>
+              <label className="block text-[11px] font-black uppercase tracking-wider">Mapeo Geopolítico e Identificadores Oficiales</label>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label className="block text-[10px] font-bold text-slate-500 mb-1">Escuelas de la Zona (Censo)</label>
-                <input type="number" value={schoolsPotential} onChange={(e) => setSchoolsPotential(Number(e.target.value))} className="w-full border border-slate-200 rounded-lg p-2 text-xs font-mono bg-white focus:outline-blue-600" />
+                <label className="block text-[10px] font-bold text-slate-500 mb-1">CveMunicipio</label>
+                <input type="number" placeholder="Ej. 1" value={cveMunicipio} onChange={(e) => setCveMunicipio(e.target.value)} className="w-full border border-slate-200 rounded-lg p-2 text-xs font-mono bg-white focus:outline-blue-600" />
               </div>
+              <div className="col-span-1 sm:col-span-2">
+                <label className="block text-[10px] font-bold text-slate-500 mb-1">CVEGEO (Clave INEGI)</label>
+                <input type="text" placeholder="Ej. 1001" value={cveGeo} onChange={(e) => setCveGeo(e.target.value)} className="w-full border border-slate-200 rounded-lg p-2 text-xs font-mono bg-white focus:outline-blue-600" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 pt-1">
               <div>
-                <label className="block text-[10px] font-bold text-slate-500 mb-1">Licencias Proyectadas en Censo</label>
-                <input type="number" value={licensesCenso} onChange={(e) => setLicensesCenso(Number(e.target.value))} className="w-full border border-slate-200 rounded-lg p-2 text-xs font-mono bg-white focus:outline-blue-600" />
+                <label className="block text-[11px] font-bold text-slate-500 mb-1">Ciudad o Localidad</label>
+                <input type="text" placeholder="Ej. Aguascalientes" value={ciudad} onChange={(e) => setCiudad(e.target.value)} className="w-full border border-slate-200 rounded-lg p-2 text-xs bg-white focus:outline-blue-600" />
               </div>
             </div>
           </div>
 
-          {/* MÉTRICAS FINANCIERAS DE LA UNE CON COMISIÓN */}
+          {/* 📊 Bloque de Censo e Indicadores Iniciales */}
           <div className="border-t border-slate-100 pt-3 bg-blue-50/30 p-3 rounded-xl border border-blue-100/40 space-y-2">
             <div className="flex items-center gap-1.5 text-blue-900 mb-1">
-              <ShieldCheck size={13} className="text-blue-500" />
-              <label className="block text-[11px] font-black uppercase tracking-wider">Proyección Financiera Base de la UNE</label>
+              <BarChart3 size={13} className="text-blue-500" />
+              <label className="block text-[11px] font-black uppercase tracking-wider">Datos Estadísticos Iniciales del Censo</label>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-[9px] font-bold text-slate-600 mb-1">Límite Mínimo UNE</label>
-                <input type="number" value={uneMinLimit} onChange={(e) => setUneMinLimit(Number(e.target.value))} className="w-full border border-slate-200 rounded-lg p-2 text-[11px] font-mono bg-white focus:outline-blue-600" />
+                <label className="block text-[10px] font-bold text-slate-600 mb-1">Escuelas Censo</label>
+                <input type="number" placeholder="0" value={schoolsPotential} onChange={(e) => setSchoolsPotential(e.target.value)} className="w-full border border-slate-200 rounded-lg p-2 text-xs font-mono bg-white focus:outline-blue-600" />
               </div>
               <div>
-                <label className="block text-[9px] font-bold text-slate-600 mb-1">Licencias de UNE</label>
-                <input type="number" value={uneLicenses} onChange={(e) => setUneLicenses(Number(e.target.value))} className="w-full border border-slate-200 rounded-lg p-2 text-[11px] font-mono bg-white focus:outline-blue-600" />
-              </div>
-              <div>
-                <label className="block text-[9px] font-bold text-slate-600 mb-1">Precio Prom. ($)</label>
-                <input type="number" step="0.01" value={averageLicensePrice} onChange={(e) => setAverageLicensePrice(Number(e.target.value))} className="w-full border border-slate-200 rounded-lg p-2 text-[11px] font-mono bg-white focus:outline-blue-600" />
-              </div>
-              <div className="col-span-2 sm:col-span-1">
-                <label className="block text-[9px] font-bold text-blue-700 mb-1">Comisión (%)</label>
-                <input type="number" value={commissionPercentage} onChange={(e) => setCommissionPercentage(Number(e.target.value))} className="w-full border border-blue-200 rounded-lg p-2 text-[11px] font-mono bg-blue-50 font-bold text-blue-900 focus:outline-blue-600" />
+                <label className="block text-[10px] font-bold text-slate-600 mb-1">Licencias Censo</label>
+                <input type="number" placeholder="0" value={licensesCenso} onChange={(e) => setLicensesCenso(e.target.value)} className="w-full border border-slate-200 rounded-lg p-2 text-xs font-mono bg-white focus:outline-blue-600" />
               </div>
             </div>
+          </div>
+
+          {/* Bloque de Operadores */}
+          <div className="border-t border-slate-100 pt-1">
+            <label className="block text-[11px] font-bold text-slate-500 mb-1">Asignado a</label>
+            <input type="text" value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} className="w-full border border-slate-200 rounded-lg p-2 text-xs focus:outline-blue-600" />
           </div>
 
           <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
             <button type="button" onClick={onClose} disabled={isSaving} className="px-4 py-2 border rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-50">Cancelar</button>
             <button type="submit" disabled={isSaving} className="px-5 py-2 bg-blue-600 text-white font-semibold rounded-lg text-xs hover:bg-blue-700 flex items-center gap-2">
-              {isSaving ? <Loader2 size={14} className="animate-spin" /> : 'Guardar Canal de Zona'}
+              {isSaving ? <Loader2 size={14} className="animate-spin" /> : 'Guardar Territorialidad'}
             </button>
           </div>
         </form>
