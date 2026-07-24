@@ -1,14 +1,38 @@
 'use client';
 
-import React from 'react';
-import { Menu, Bell, ChevronDown } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Menu, Bell, ChevronDown, LogOut } from 'lucide-react';
 
 interface HeaderPanelProps {
   onMenuToggle: () => void;
   onLogout: () => void;
+  adminName?: string;
+  adminRole?: string;
 }
 
-export default function HeaderPanel({ onMenuToggle, onLogout }: HeaderPanelProps) {
+export default function HeaderPanel({ onMenuToggle, onLogout, adminName, adminRole }: HeaderPanelProps) {
+  const displayName = adminName || 'Administrador';
+  const displayRole = adminRole === 'admin' ? 'Administrador' : (adminRole || 'Administrador');
+  const initial = displayName.trim().charAt(0).toUpperCase() || 'A';
+
+  // Menú por clic (no por hover): un dropdown en hover se cierra apenas el mouse
+  // sale del área del disparador, sin darle tiempo al usuario de llegar al botón.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [menuOpen]);
+
   return (
     <header className="flex h-16 items-center justify-between border-b border-gray-200 bg-white px-6 sticky top-0 z-30 shadow-sm">
 
@@ -41,26 +65,36 @@ export default function HeaderPanel({ onMenuToggle, onLogout }: HeaderPanelProps
         {/* Divisor Visual */}
         <div className="h-6 w-px bg-gray-200" />
 
-        {/* Menú de Perfil de Usuario */}
-        <div className="group relative flex items-center gap-3 cursor-pointer p-1.5 rounded-lg hover:bg-gray-50 transition-colors">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-sm font-semibold text-white shadow-sm">
-            V
-          </div>
-          <div className="hidden md:block text-left">
-            <p className="text-sm font-semibold text-gray-800 leading-tight">Víctor Laguna</p>
-            <p className="text-xs text-gray-400">Administrador</p>
-          </div>
-          <ChevronDown size={16} className="text-gray-400 group-hover:text-gray-600 transition-colors" />
+        {/* Menú de Perfil de Usuario (por clic) */}
+        <div ref={menuRef} className="relative">
+          <button
+            onClick={() => setMenuOpen((open) => !open)}
+            className="flex items-center gap-3 cursor-pointer p-1.5 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-sm font-semibold text-white shadow-sm">
+              {initial}
+            </div>
+            <div className="hidden md:block text-left">
+              <p className="text-sm font-semibold text-gray-800 leading-tight">{displayName}</p>
+              <p className="text-xs text-gray-400">{displayRole}</p>
+            </div>
+            <ChevronDown size={16} className={`text-gray-400 transition-transform ${menuOpen ? 'rotate-180' : ''}`} />
+          </button>
 
-          {/* Dropdown simple al hacer hover o clic (opcional) */}
-          <div className="absolute right-0 top-full mt-2 w-48 origin-top-right rounded-xl border border-gray-100 bg-white p-2 shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
-            <button
-              onClick={onLogout}
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-rose-600 hover:bg-rose-50/50"
-            >
-              Cerrar sesión
-            </button>
-          </div>
+          {menuOpen && (
+            <div className="absolute right-0 top-full mt-2 w-48 origin-top-right rounded-xl border border-gray-100 bg-white p-2 shadow-xl animate-fade-in z-40">
+              <button
+                onClick={() => {
+                  setMenuOpen(false);
+                  onLogout();
+                }}
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-rose-600 hover:bg-rose-50/50"
+              >
+                <LogOut size={15} />
+                Cerrar sesión
+              </button>
+            </div>
+          )}
         </div>
 
       </div>

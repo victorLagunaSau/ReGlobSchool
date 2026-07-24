@@ -1,8 +1,7 @@
 'use client';
 
 import React, {useState} from 'react';
-import {signInWithEmailAndPassword} from 'firebase/auth';
-import {auth} from '../../../lib/firebase';
+import {supabase} from '../../../lib/supabase/client';
 import {AuthView} from './page';
 
 interface LoginFormProps {
@@ -50,18 +49,29 @@ export default function LoginForm({setView, triggerToast}: LoginFormProps) {
       return; // Detiene la ejecución aquí
     }
 
-    // 3. INTENTO DE AUTENTICACIÓN: Si pasó lo anterior, va a Firebase
+    // 3. INTENTO DE AUTENTICACIÓN: Si pasó lo anterior, va a Supabase
     try {
       setLoading(true);
-      await signInWithEmailAndPassword(auth, cleanEmail, cleanPassword);
+      const { error } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password: cleanPassword,
+      });
+
+      if (error) {
+        console.error("Error capturado desde Supabase:", error);
+
+        let message = 'Credenciales incorrectas. Revisa tu correo o activa el icono del ojo para verificar tu contraseña.';
+        if (error.message === 'Email not confirmed') {
+          message = 'Tu correo aún no ha sido confirmado. Revisa tu bandeja de entrada.';
+        } else if (error.message && error.message !== 'Invalid login credentials') {
+          message = error.message;
+        }
+
+        triggerToast('Error de Acceso', message, 'error');
+        return;
+      }
+
       window.location.href = '/';
-    } catch (err: any) {
-      console.error("Error capturado desde Firebase:", err);
-      triggerToast(
-        'Error de Acceso',
-        'Credenciales incorrectas. Revisa tu correo o activa el icono del ojo para verificar tu contraseña.',
-        'error'
-      );
     } finally {
       setLoading(false);
     }

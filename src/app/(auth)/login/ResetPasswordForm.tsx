@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { sendPasswordResetEmail } from 'firebase/auth';
-import { auth } from '../../../lib/firebase';
+import { supabase } from '../../../lib/supabase/client';
 import { AuthView } from './page';
 
 interface ResetPasswordFormProps {
@@ -28,11 +27,17 @@ export default function ResetPasswordForm({ setView, triggerToast }: ResetPasswo
 
     try {
       setLoading(true);
-      await sendPasswordResetEmail(auth, cleanEmail);
+      // Por seguridad, Supabase siempre responde éxito exista o no la cuenta
+      // (evita que alguien use este formulario para adivinar correos registrados).
+      const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+
+      if (error) throw error;
 
       triggerToast(
         'Enlace Enviado',
-        'Se ha enviado un correo electrónico con las instrucciones para restablecer tu contraseña. Revisa tu bandeja de entrada o spam.',
+        'Si existe una cuenta con ese correo, recibirás instrucciones para restablecer tu contraseña. Revisa tu bandeja de entrada o spam.',
         'success'
       );
 
@@ -43,27 +48,11 @@ export default function ResetPasswordForm({ setView, triggerToast }: ResetPasswo
 
     } catch (err: any) {
       console.error('Error en recuperación:', err);
-
-      let titleError = 'Error de Recuperación';
-      let messageError = 'No se pudo enviar el correo de recuperación en este momento.';
-
-      // Mapeo de errores de Firebase Auth
-      if (err.code === 'auth/user-not-found') {
-        titleError = 'Usuario No Encontrado';
-        messageError = 'No existe ninguna cuenta registrada con este correo electrónico.';
-      } else if (err.code === 'auth/invalid-email') {
-        titleError = 'Correo Inválido';
-        messageError = 'El servidor no reconoce este correo electrónico como válido.';
-      } else if (err.code === 'auth/network-request-failed') {
-        titleError = 'Error de Red';
-        messageError = 'Revisa tu conexión a internet e inténtalo de nuevo.';
-      }
-
-      if (typeof triggerToast === 'function') {
-        triggerToast(titleError, messageError, 'error');
-      } else {
-        alert(`${titleError}: ${messageError}`);
-      }
+      triggerToast(
+        'Error de Recuperación',
+        err.message || 'No se pudo enviar el correo de recuperación en este momento.',
+        'error'
+      );
     } finally {
       setLoading(false);
     }

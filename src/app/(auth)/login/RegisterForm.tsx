@@ -1,11 +1,20 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
-import { auth, db } from '../../../lib/firebase';
+import { supabase } from '../../../lib/supabase/client';
 import { AuthView } from './page';
+
+interface Country {
+  id: string;
+  name: string;
+}
+
+interface StateOption {
+  id: string;
+  country_id: string;
+  name: string;
+}
 
 interface RegisterFormProps {
   setView: (v: AuthView) => void;
@@ -38,6 +47,23 @@ export default function RegisterForm({ setView, triggerToast }: RegisterFormProp
   const emailRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
   const confirmPasswordRef = useRef<HTMLInputElement>(null);
+
+  // --- PAÍS / ESTADO (opcionales: si el catálogo aún no tiene datos, quedan en null) ---
+  const [countries, setCountries] = useState<Country[]>([]);
+  const [allStates, setAllStates] = useState<StateOption[]>([]);
+  const [selectedCountryId, setSelectedCountryId] = useState('');
+  const [selectedStateId, setSelectedStateId] = useState('');
+
+  useEffect(() => {
+    supabase.from('countries').select('id, name').order('name').then(({ data }) => {
+      if (data) setCountries(data);
+    });
+    supabase.from('states').select('id, country_id, name').order('name').then(({ data }) => {
+      if (data) setAllStates(data);
+    });
+  }, []);
+
+  const filteredStates = allStates.filter((s) => s.country_id === selectedCountryId);
 
   const totalSteps = 4;
 
@@ -117,26 +143,32 @@ export default function RegisterForm({ setView, triggerToast }: RegisterFormProp
     try {
       setLoading(true);
 
-      // 1. Registro en Firebase Auth
-      const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password.trim());
-      const user = userCredential.user;
+      // 1. Registro en Supabase Auth (requiere "Confirm email" desactivado en el
+      //    proyecto para que devuelva sesión activa de inmediato, igual que antes)
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+        email: email.trim(),
+        password: password.trim(),
+      });
+      if (signUpError) throw signUpError;
 
-      // 2. Guardar en Firestore (Persiste 'null' si va vacío)
-      await setDoc(doc(db, 'users', user.uid), {
-        uid: user.uid,
-        fullName: fullName.trim(),
+      const user = signUpData.user;
+      if (!user) throw new Error('No se pudo crear el usuario.');
+
+      // 2. Guardar perfil en Postgres (país/estado quedan en null si no se seleccionaron)
+      const { error: profileError } = await supabase.from('profiles').insert({
+        id: user.id,
+        full_name: fullName.trim(),
         project: project.trim(),
-        businessPartner: businessPartner.trim() ? businessPartner.trim() : null,
-        personalPhone: personalPhone.trim(),
-        officePhone: officePhone.trim(),
+        business_partner: businessPartner.trim() ? businessPartner.trim() : null,
+        personal_phone: personalPhone.trim(),
+        office_phone: officePhone.trim(),
         email: email.trim().toLowerCase(),
         role: 'admin',
         authorized: false,
-        createdAt: new Date().toISOString(),
+        country_id: selectedCountryId || null,
+        state_id: selectedStateId || null,
       });
-
-      // 3. Autologueo
-      await signInWithEmailAndPassword(auth, email.trim(), password.trim());
+      if (profileError) throw profileError;
 
       triggerToast('Registro Exitoso', 'Tu cuenta fue creada. Espera la autorización del sistema.', 'success');
 
@@ -150,12 +182,9 @@ export default function RegisterForm({ setView, triggerToast }: RegisterFormProp
       let titleError = 'Error de Registro';
       let messageError = err.message || 'No se pudo completar el registro.';
 
-      if (err.code === 'auth/email-already-in-use') {
+      if (err.message?.toLowerCase().includes('already registered')) {
         titleError = 'Cuenta Duplicada';
         messageError = 'Este correo electrónico ya está registrado.';
-      } else if (err.code === 'permission-denied') {
-        titleError = 'Acceso Base de Datos';
-        messageError = 'No se pudo guardar el perfil del usuario.';
       }
 
       if (typeof triggerToast === 'function') {
@@ -236,6 +265,44 @@ export default function RegisterForm({ setView, triggerToast }: RegisterFormProp
                 placeholder="Nombre de tu socio comercial"
                 className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-950 focus:outline-none focus:border-primary transition-colors"
               />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
+                  País <span className="text-slate-400 font-normal">(Opcional)</span>
+                </label>
+                <select
+                  value={selectedCountryId}
+                  onChange={(e) => { setSelectedCountryId(e.target.value); setSelectedStateId(''); }}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-950 focus:outline-none focus:border-primary transition-colors"
+                >
+                  <option value="">
+                    {countries.length === 0 ? 'Sin países disponibles' : 'Selecciona...'}
+                  </option>
+                  {countries.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
+                  Estado <span className="text-slate-400 font-normal">(Opcional)</span>
+                </label>
+                <select
+                  value={selectedStateId}
+                  onChange={(e) => setSelectedStateId(e.target.value)}
+                  disabled={!selectedCountryId}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-950 focus:outline-none focus:border-primary transition-colors disabled:opacity-50"
+                >
+                  <option value="">
+                    {!selectedCountryId ? 'Elige un país primero' : filteredStates.length === 0 ? 'Sin estados disponibles' : 'Selecciona...'}
+                  </option>
+                  {filteredStates.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
         )}

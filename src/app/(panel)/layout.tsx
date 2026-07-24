@@ -2,9 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
-import { auth, db } from '../../lib/firebase';
+import { supabase } from '../../lib/supabase/client';
 import Sidebar from '@/src/components/Sidebar';
 import HeaderPanel from '@/src/components/HeaderPanel';
 import Footer from '@/src/components/Footer';
@@ -15,23 +13,24 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
   const [loading, setLoading] = useState(true);
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [adminName, setAdminName] = useState('');
+  const [adminRole, setAdminRole] = useState('');
   const router = useRouter();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (!user) {
-        router.push('/');
-        return;
-      }
+    const checkAuthorization = async (userId: string) => {
       try {
-        const userDocRef = doc(db, 'users', user.uid);
-        const userDoc = await getDoc(userDocRef);
-        if (userDoc.exists()) {
-          const userData = userDoc.data();
-          setAdminName(userData.fullName || 'Administrador');
-          setIsAuthorized(userData.authorized === true);
-        } else {
+        const { data: profile, error } = await supabase
+          .from('profiles')
+          .select('full_name, role, authorized')
+          .eq('id', userId)
+          .single();
+
+        if (error || !profile) {
           setIsAuthorized(false);
+        } else {
+          setAdminName(profile.full_name || 'Administrador');
+          setAdminRole(profile.role || 'Administrador');
+          setIsAuthorized(profile.authorized === true);
         }
       } catch (error) {
         console.error("Error al validar autorización:", error);
@@ -39,14 +38,30 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
       } finally {
         setLoading(false);
       }
+    };
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session?.user) {
+        router.push('/');
+        return;
+      }
+      checkAuthorization(session.user.id);
     });
 
-    return () => unsubscribe();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session?.user) {
+        router.push('/');
+        return;
+      }
+      checkAuthorization(session.user.id);
+    });
+
+    return () => subscription.unsubscribe();
   }, [router]);
 
   const handleLogout = async () => {
     try {
-      await signOut(auth);
+      await supabase.auth.signOut();
       router.push('/login');
     } catch (error) {
       console.error("Error al cerrar sesión:", error);
@@ -82,7 +97,12 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
       <Sidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} onLogout={handleLogout} />
 
       <div className="flex flex-col min-h-screen lg:pl-64 transition-all duration-300 ease-in-out">
-        <HeaderPanel onMenuToggle={() => setIsSidebarOpen(!isSidebarOpen)} onLogout={handleLogout} />
+        <HeaderPanel
+          onMenuToggle={() => setIsSidebarOpen(!isSidebarOpen)}
+          onLogout={handleLogout}
+          adminName={adminName}
+          adminRole={adminRole}
+        />
 
         <main className="flex-1 p-4 md:p-6 max-w-7xl w-full mx-auto animate-fade-in">
           {children}

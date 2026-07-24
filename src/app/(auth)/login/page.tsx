@@ -2,8 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { onAuthStateChanged } from 'firebase/auth';
-import { auth } from '../../../lib/firebase'; // ◄ Asegúrate de que esta ruta apunte correctamente a tu config de Firebase
+import { supabase } from '../../../lib/supabase/client';
 import logoImg from '../../../../public/assets/logos/logo.png';
 import LoginForm from './LoginForm';
 import RegisterForm from './RegisterForm';
@@ -27,15 +26,13 @@ export default function LoginPage() {
 
   useEffect(() => {
     // Si el usuario ya está autenticado, lo redirigimos directo al panel
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
         router.push('/dashboard');
       } else {
         setLoading(false);
       }
     });
-
-    return () => unsubscribe();
   }, [router]);
 
   const triggerToast = (title: string, message: string, variant: 'success' | 'error' | 'warning' | 'info') => {
