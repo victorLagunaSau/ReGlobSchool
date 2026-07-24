@@ -1,17 +1,18 @@
 'use client';
 
-import React, { useEffect, useState, useMemo } from 'react';
-import { collection, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { db } from '@/src/lib/firebase';
+import React, { useState, useMemo } from 'react';
+import { supabase } from '../../../../../lib/supabase/client';
 import { Edit2, Check, X, Trash2, Search, ChevronLeft, ChevronRight, MapPin } from 'lucide-react';
+import type { Country, StateRow, ZoneRow } from '../page';
 
 interface TablaZonasProps {
-  countries: any[];
-  states: any[];
+  countries: Country[];
+  states: StateRow[];
+  zones: ZoneRow[];
+  onRefresh: () => void;
 }
 
-export default function TablaZonas({ countries, states }: TablaZonasProps) {
-  const [zones, setZones] = useState<any[]>([]);
+export default function TablaZonas({ states, zones, onRefresh }: TablaZonasProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<any>(null);
 
@@ -21,29 +22,20 @@ export default function TablaZonas({ countries, states }: TablaZonasProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, 'zones'), (snapshot) => {
-      setZones(snapshot.docs.map(doc => doc.data()));
-    });
-    return () => unsubscribe();
-  }, []);
- console.log(zones.map(z => `${z.id} | ${z.Pais} | ${z.CodEstado} | ${z.Estado} | ${z.CveMunicipio} | ${z.CVEGEO} | ${z.Ciudad} | ${z.assignedTo} | ${z.countryId}`));
-
   // Lógica de filtrado combinado mapeada a la estructura cartográfica
   const filteredZones = useMemo(() => {
-    return zones.filter((z: any) => {
-      const cityName = z.Ciudad || z.city || '';
-      const matchesCity = cityName.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesState = filterState ? z.stateId === filterState : true;
+    return zones.filter((z) => {
+      const matchesCity = z.city.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesState = filterState ? z.state_id === filterState : true;
       return matchesCity && matchesState;
     });
   }, [zones, searchTerm, filterState]);
 
   // Totales de control basados exclusivamente en la proyección del Censo
   const totals = useMemo(() => {
-    return filteredZones.reduce((acc, z: any) => {
-      acc.schools += (z.schoolsPotential || 0);
-      acc.licCenso += (z.licensesCenso || 0);
+    return filteredZones.reduce((acc, z) => {
+      acc.schools += (z.schools_potential || 0);
+      acc.licCenso += (z.licenses_censo || 0);
       return acc;
     }, { schools: 0, licCenso: 0 });
   }, [filteredZones]);
@@ -52,27 +44,40 @@ export default function TablaZonas({ countries, states }: TablaZonasProps) {
   const totalPages = Math.ceil(filteredZones.length / itemsPerPage) || 1;
   const paginatedZones = filteredZones.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
-  const startEditing = (zone: any) => {
+  const startEditing = (zone: ZoneRow) => {
     setEditingId(zone.id);
     setEditForm({ ...zone });
   };
 
   const saveEdit = async (id: string) => {
-    await updateDoc(doc(db, 'zones', id), {
-      Ciudad: editForm.Ciudad,
-      city: editForm.Ciudad, // Sincronizado por retrocompatibilidad
-      CveMunicipio: Number(editForm.CveMunicipio),
-      CVEGEO: editForm.CVEGEO,
-      schoolsPotential: Number(editForm.schoolsPotential),
-      licensesCenso: Number(editForm.licensesCenso),
-      assignedTo: editForm.assignedTo
-    });
+    const { error } = await supabase
+      .from('zones')
+      .update({
+        city: editForm.city,
+        cve_municipio: Number(editForm.cve_municipio),
+        cvegeo: editForm.cvegeo,
+        schools_potential: Number(editForm.schools_potential),
+        licenses_censo: Number(editForm.licenses_censo),
+        assigned_to: editForm.assigned_to,
+      })
+      .eq('id', id);
+
+    if (error) {
+      console.error('Error al actualizar zona:', error);
+      return;
+    }
     setEditingId(null);
+    onRefresh();
   };
 
   const handleDeleteZone = async (id: string, city: string) => {
     if (window.confirm(`¿Eliminar de forma permanente el territorio cartográfico de ${city}?`)) {
-      await deleteDoc(doc(db, 'zones', id));
+      const { error } = await supabase.from('zones').delete().eq('id', id);
+      if (error) {
+        console.error('Error al eliminar zona:', error);
+        return;
+      }
+      onRefresh();
     }
   };
 
@@ -108,7 +113,7 @@ export default function TablaZonas({ countries, states }: TablaZonasProps) {
           onChange={(e) => { setFilterState(e.target.value); setCurrentPage(1); }}
         >
           <option value="">Todos los Estados</option>
-          {states.map((s: any) => <option key={s.id} value={s.id}>{s.name || s.Estado}</option>)}
+          {states.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
       </div>
 
@@ -138,11 +143,8 @@ export default function TablaZonas({ countries, states }: TablaZonasProps) {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
-              {paginatedZones.map((zone: any) => {
+              {paginatedZones.map((zone) => {
                 const isEditing = editingId === zone.id;
-                const displayCity = zone.Ciudad || zone.city || '—';
-                const displayState = zone.Estado || states.find(s => s.id === zone.stateId)?.name || zone.stateId || '—';
-                const displayCountry = zone.Pais || zone.countryId || '—';
 
                 return (
                   <tr key={zone.id} className={`transition-colors ${isEditing ? 'bg-blue-50/40 hover:bg-blue-50/50' : 'hover:bg-slate-50/60'}`}>
@@ -151,7 +153,7 @@ export default function TablaZonas({ countries, states }: TablaZonasProps) {
                     <td className="py-3 px-4 relative">
                       {isEditing && <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-600 rounded-l" />}
                       <div className="font-mono text-[11px] text-blue-600 font-bold uppercase tracking-wider">{zone.id}</div>
-                      <div className="text-[9px] text-slate-400 font-medium font-mono">{zone.countryId}</div>
+                      <div className="text-[9px] text-slate-400 font-medium font-mono">{zone.country_id}</div>
                     </td>
 
                     {/* COLUMNA 2: LOCALIDAD / ESTADO */}
@@ -159,17 +161,17 @@ export default function TablaZonas({ countries, states }: TablaZonasProps) {
                       {isEditing ? (
                         <input
                           type="text"
-                          value={editForm.Ciudad || ''}
-                          onChange={(e) => setEditForm({...editForm, Ciudad: e.target.value})}
+                          value={editForm.city || ''}
+                          onChange={(e) => setEditForm({...editForm, city: e.target.value})}
                           className="border border-blue-400 rounded px-2 py-1 text-xs w-full focus:outline-blue-600 bg-white font-bold shadow-inner"
                         />
                       ) : (
-                        <div className="font-bold text-slate-900 text-sm truncate max-w-[180px]" title={displayCity}>
-                          {displayCity}
+                        <div className="font-bold text-slate-900 text-sm truncate max-w-[180px]" title={zone.city}>
+                          {zone.city}
                         </div>
                       )}
                       <div className="text-[10px] text-slate-500 font-semibold mt-0.5 flex items-center gap-1">
-                        <MapPin size={10} className="text-slate-400" /> {displayState}, {displayCountry}
+                        <MapPin size={10} className="text-slate-400" /> {zone.state_name}, {zone.country_name}
                       </div>
                     </td>
 
@@ -178,12 +180,12 @@ export default function TablaZonas({ countries, states }: TablaZonasProps) {
                       {isEditing ? (
                         <input
                           type="number"
-                          value={editForm.CveMunicipio || ''}
-                          onChange={(e) => setEditForm({...editForm, CveMunicipio: e.target.value})}
+                          value={editForm.cve_municipio || ''}
+                          onChange={(e) => setEditForm({...editForm, cve_municipio: e.target.value})}
                           className="w-16 border border-slate-300 rounded text-center text-xs p-1 focus:border-blue-500 focus:outline-none"
                         />
                       ) : (
-                        <span className="text-slate-700 font-semibold">{zone.CveMunicipio ?? '—'}</span>
+                        <span className="text-slate-700 font-semibold">{zone.cve_municipio ?? '—'}</span>
                       )}
                     </td>
 
@@ -192,12 +194,12 @@ export default function TablaZonas({ countries, states }: TablaZonasProps) {
                       {isEditing ? (
                         <input
                           type="text"
-                          value={editForm.CVEGEO || ''}
-                          onChange={(e) => setEditForm({...editForm, CVEGEO: e.target.value})}
+                          value={editForm.cvegeo || ''}
+                          onChange={(e) => setEditForm({...editForm, cvegeo: e.target.value})}
                           className="w-24 border border-slate-300 rounded text-center text-xs p-1 focus:border-blue-500 focus:outline-none"
                         />
                       ) : (
-                        <span className="text-slate-600 font-bold bg-slate-100 px-2 py-0.5 rounded text-[11px] border border-slate-200">{zone.CVEGEO ?? '—'}</span>
+                        <span className="text-slate-600 font-bold bg-slate-100 px-2 py-0.5 rounded text-[11px] border border-slate-200">{zone.cvegeo ?? '—'}</span>
                       )}
                     </td>
 
@@ -206,13 +208,13 @@ export default function TablaZonas({ countries, states }: TablaZonasProps) {
                       {isEditing ? (
                         <input
                           type="number"
-                          value={editForm.schoolsPotential || 0}
-                          onChange={(e) => setEditForm({...editForm, schoolsPotential: e.target.value})}
+                          value={editForm.schools_potential || 0}
+                          onChange={(e) => setEditForm({...editForm, schools_potential: e.target.value})}
                           className="w-20 border border-slate-300 rounded text-center text-xs p-1 focus:border-blue-500 focus:outline-none"
                         />
                       ) : (
                         <div className="text-slate-800 font-semibold text-xs">
-                          {(zone.schoolsPotential || 0).toLocaleString()} <span className="text-[9px] font-sans font-bold text-slate-400">ESC.</span>
+                          {(zone.schools_potential || 0).toLocaleString()} <span className="text-[9px] font-sans font-bold text-slate-400">ESC.</span>
                         </div>
                       )}
                     </td>
@@ -222,13 +224,13 @@ export default function TablaZonas({ countries, states }: TablaZonasProps) {
                       {isEditing ? (
                         <input
                           type="number"
-                          value={editForm.licensesCenso || 0}
-                          onChange={(e) => setEditForm({...editForm, licensesCenso: e.target.value})}
+                          value={editForm.licenses_censo || 0}
+                          onChange={(e) => setEditForm({...editForm, licenses_censo: e.target.value})}
                           className="w-24 border border-slate-300 rounded text-center text-xs p-1 focus:border-blue-500 focus:outline-none"
                         />
                       ) : (
                         <div className="text-blue-700 font-black text-xs">
-                          {(zone.licensesCenso || 0).toLocaleString()} <span className="text-[9px] font-sans font-bold text-blue-400">LIC.</span>
+                          {(zone.licenses_censo || 0).toLocaleString()} <span className="text-[9px] font-sans font-bold text-blue-400">LIC.</span>
                         </div>
                       )}
                     </td>
@@ -238,13 +240,13 @@ export default function TablaZonas({ countries, states }: TablaZonasProps) {
                       {isEditing ? (
                         <input
                           type="text"
-                          value={editForm.assignedTo || ''}
-                          onChange={(e) => setEditForm({...editForm, assignedTo: e.target.value})}
+                          value={editForm.assigned_to || ''}
+                          onChange={(e) => setEditForm({...editForm, assigned_to: e.target.value})}
                           className="border border-blue-400 rounded px-2 py-1 text-xs w-full focus:outline-blue-600 bg-white"
                         />
                       ) : (
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${zone.assignedTo === 'Libre' ? 'bg-slate-100 text-slate-600' : 'bg-blue-600 text-white shadow-xs'}`}>
-                          {zone.assignedTo || 'Libre'}
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${zone.assigned_to === 'Libre' || !zone.assigned_to ? 'bg-slate-100 text-slate-600' : 'bg-blue-600 text-white shadow-xs'}`}>
+                          {zone.assigned_to || 'Libre'}
                         </span>
                       )}
                     </td>
@@ -259,7 +261,7 @@ export default function TablaZonas({ countries, states }: TablaZonasProps) {
                       ) : (
                         <div className="flex justify-center gap-1.5">
                           <button onClick={() => startEditing(zone)} disabled={editingId !== null} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-slate-100 rounded-md disabled:opacity-30" title="Editar"><Edit2 size={13} /></button>
-                          <button onClick={() => handleDeleteZone(zone.id, displayCity)} disabled={editingId !== null} className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md disabled:opacity-30" title="Eliminar"><Trash2 size={13} /></button>
+                          <button onClick={() => handleDeleteZone(zone.id, zone.city)} disabled={editingId !== null} className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md disabled:opacity-30" title="Eliminar"><Trash2 size={13} /></button>
                         </div>
                       )}
                     </td>

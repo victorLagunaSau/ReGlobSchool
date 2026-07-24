@@ -1,18 +1,19 @@
 'use client';
 
 import React, { useState } from 'react';
-import { collection, doc, setDoc, getDocs, query, where } from 'firebase/firestore';
-import { db } from '@/src/lib/firebase';
+import { supabase } from '../../../../../lib/supabase/client';
 import { Loader2, X, BarChart3 } from 'lucide-react';
+import type { Country, StateRow } from '../page';
 
 interface FormRegistrarZonaProps {
   isOpen: boolean;
   onClose: () => void;
-  countries: Array<{ id: string; name: string }>;
-  states: Array<{ id: string; countryId: string; name: string; CveEstado?: number; CodEstado?: string; Estado?: string; Pais?: string }>;
+  countries: Country[];
+  states: StateRow[];
+  onCreated: () => void;
 }
 
-export default function FormRegistrarZona({ isOpen, onClose, countries, states }: FormRegistrarZonaProps) {
+export default function FormRegistrarZona({ isOpen, onClose, countries, states, onCreated }: FormRegistrarZonaProps) {
   const [selectedCountry, setSelectedCountry] = useState('MX');
   const [selectedState, setSelectedState] = useState(''); // Representa el stateId (Ej: MX-AGS)
   const [assignedTo, setAssignedTo] = useState('Libre');
@@ -23,13 +24,13 @@ export default function FormRegistrarZona({ isOpen, onClose, countries, states }
   const [cveGeo, setCveGeo] = useState('');
   const [ciudad, setCiudad] = useState('');
 
-  // 📊 Campos de Proyección Censal (Añadidos de vuelta)
+  // Campos de Proyección Censal
   const [schoolsPotential, setSchoolsPotential] = useState('');
   const [licensesCenso, setLicensesCenso] = useState('');
 
   if (!isOpen) return null;
 
-  const filteredStates = states.filter(s => s.countryId === selectedCountry);
+  const filteredStates = states.filter(s => s.country_id === selectedCountry);
 
   const handleCreateZone = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,45 +41,31 @@ export default function FormRegistrarZona({ isOpen, onClose, countries, states }
     setIsSaving(true);
 
     try {
-      // Obtener datos del estado padre seleccionados en Config
-      const stateObj = states.find(s => s.id === selectedState);
-
-      const cveEstadoObj = stateObj?.CveEstado !== undefined ? Number(stateObj.CveEstado) : 1;
-      const paisObj = stateObj?.Pais || stateObj?.countryId || 'México';
-      const codEstadoObj = stateObj?.CodEstado || selectedState.split('-')[1] || 'AGS';
-      const estadoObj = stateObj?.Estado || stateObj?.name || 'Aguascalientes';
-
       // Consulta consecutiva basada únicamente en el Estado (ID limpio sin canal)
-      const zonesRef = collection(db, 'zones');
-      const q = query(zonesRef, where('stateId', '==', selectedState));
-      const querySnapshot = await getDocs(q);
-      const nextConsecutive = querySnapshot.size + 1;
+      const { count } = await supabase
+        .from('zones')
+        .select('id', { count: 'exact', head: true })
+        .eq('state_id', selectedState);
+
+      const nextConsecutive = (count || 0) + 1;
       const paddedConsecutive = String(nextConsecutive).padStart(3, '0');
 
       // Formato de ID limpio requerido: MX-AGS-001
       const zoneId = `${selectedState}-${paddedConsecutive}`;
-      const zoneDocRef = doc(db, 'zones', zoneId);
 
-      await setDoc(zoneDocRef, {
+      const { error } = await supabase.from('zones').insert({
         id: zoneId,
-        countryId: selectedCountry,
-        stateId: selectedState,
-        assignedTo: assignedTo,
-
-        // Mapeo de la Estructura Cartográfica Limpia
-        CveEstado: cveEstadoObj,
-        Pais: paisObj,
-        CodEstado: codEstadoObj,
-        Estado: estadoObj,
-        CveMunicipio: Number(cveMunicipio.trim()),
-        CVEGEO: cveGeo.trim(),
-        Ciudad: ciudad.trim(),
-        city: ciudad.trim(), // Retrocompatibilidad visual
-
-        // Datos de Censo / Proyección
-        schoolsPotential: Number(schoolsPotential) || 0, // Mapea a 'Escuelas Censo'
-        licensesCenso: Number(licensesCenso) || 0        // Mapea a 'Lic. Censo'
+        country_id: selectedCountry,
+        state_id: selectedState,
+        assigned_to: assignedTo,
+        cve_municipio: Number(cveMunicipio.trim()),
+        cvegeo: cveGeo.trim(),
+        city: ciudad.trim(),
+        schools_potential: Number(schoolsPotential) || 0,
+        licenses_censo: Number(licensesCenso) || 0,
       });
+
+      if (error) throw error;
 
       // Limpieza de estados
       setCveMunicipio('');
@@ -87,9 +74,10 @@ export default function FormRegistrarZona({ isOpen, onClose, countries, states }
       setSchoolsPotential('');
       setLicensesCenso('');
       setAssignedTo('Libre');
+      onCreated();
       onClose();
     } catch (error) {
-      console.error('Error al guardar zona en Firestore:', error);
+      console.error('Error al guardar zona en Supabase:', error);
     } finally {
       setIsSaving(false);
     }
@@ -154,7 +142,7 @@ export default function FormRegistrarZona({ isOpen, onClose, countries, states }
             </div>
           </div>
 
-          {/* 📊 Bloque de Censo e Indicadores Iniciales */}
+          {/* Bloque de Censo e Indicadores Iniciales */}
           <div className="border-t border-slate-100 pt-3 bg-blue-50/30 p-3 rounded-xl border border-blue-100/40 space-y-2">
             <div className="flex items-center gap-1.5 text-blue-900 mb-1">
               <BarChart3 size={13} className="text-blue-500" />
