@@ -1,30 +1,17 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore';
-import { db } from '@/src/lib/firebase';
-import { Globe, Map, PlusCircle, Loader2, Trash2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { supabase } from '../../../../../lib/supabase/client';
+import { Globe, Map, PlusCircle, Trash2 } from 'lucide-react';
+import type { Country, StateRow } from '../page';
 
-interface Country {
-  id: string;
-  name: string;
+interface ConfigProps {
+  countries: Country[];
+  states: StateRow[];
+  onRefresh: () => void;
 }
 
-interface State {
-  id: string;
-  countryId: string;
-  Pais: string;
-  CveEstado: number;
-  CodEstado: string;
-  name: string;
-  Estado: string;
-}
-
-export default function Config() {
-  const [countries, setCountries] = useState<Country[]>([]);
-  const [states, setStates] = useState<State[]>([]);
-  const [loading, setLoading] = useState(true);
-
+export default function Config({ countries, states, onRefresh }: ConfigProps) {
   // Estados de los Formularios
   const [countryId, setCountryId] = useState('');
   const [countryName, setCountryName] = useState('');
@@ -34,52 +21,17 @@ export default function Config() {
   const [codEstado, setCodEstado] = useState('');
   const [stateName, setStateName] = useState('');
 
-  // Escucha en Tiempo Real robusta desde Firestore
-  useEffect(() => {
-    const unsubCountries = onSnapshot(collection(db, 'countries'), (snapshot) => {
-      setCountries(snapshot.docs.map(d => {
-        const data = d.data();
-        return {
-          id: d.id, // Forzamos el ID del documento físico de Firestore (ej: "GT", "MX")
-          name: data.name || data.Pais || data.Nombre || d.id // Tolerancia a variaciones de columnas
-        } as Country;
-      }));
-    });
-
-    const unsubStates = onSnapshot(collection(db, 'states'), (snapshot) => {
-      setStates(snapshot.docs.map(d => {
-        const data = d.data();
-        return {
-          id: d.id,
-          countryId: data.countryId || '',
-          Pais: data.Pais || data.countryName || '',
-          CveEstado: Number(data.CveEstado || 0),
-          CodEstado: data.CodEstado || '',
-          name: data.name || data.Estado || '',
-          Estado: data.Estado || data.name || ''
-        } as State;
-      }));
-      setLoading(false);
-    });
-
-    return () => {
-      unsubCountries();
-      unsubStates();
-    };
-  }, []);
-
   const handleCreateCountry = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!countryId.trim() || !countryName.trim()) return;
 
     const cleanId = countryId.trim().toUpperCase().replace(/\s+/g, '');
     try {
-      await setDoc(doc(db, 'countries', cleanId), {
-        id: cleanId,
-        name: countryName.trim()
-      });
+      const { error } = await supabase.from('countries').insert({ id: cleanId, name: countryName.trim() });
+      if (error) throw error;
       setCountryId('');
       setCountryName('');
+      onRefresh();
     } catch (err) { console.error(err); }
   };
 
@@ -87,47 +39,42 @@ export default function Config() {
     e.preventDefault();
     if (!selectedCountryId || !cveEstado.trim() || !codEstado.trim() || !stateName.trim()) return;
 
-    const parentCountry = countries.find(c => c.id === selectedCountryId);
-    const paisName = parentCountry ? parentCountry.name : '';
-
     const cleanCodEstado = codEstado.trim().toUpperCase().replace(/\s+/g, '');
     const cleanStateId = `${selectedCountryId}-${cleanCodEstado}`;
 
     try {
-      await setDoc(doc(db, 'states', cleanStateId), {
+      const { error } = await supabase.from('states').insert({
         id: cleanStateId,
-        countryId: selectedCountryId,
-        Pais: paisName,
-        CveEstado: Number(cveEstado.trim()),
-        CodEstado: cleanCodEstado,
+        country_id: selectedCountryId,
+        cve_estado: Number(cveEstado.trim()),
+        cod_estado: cleanCodEstado,
         name: stateName.trim(),
-        Estado: stateName.trim()
       });
+      if (error) throw error;
       setCveEstado('');
       setCodEstado('');
       setStateName('');
+      onRefresh();
     } catch (err) { console.error(err); }
   };
 
   const handleDeleteCountry = async (id: string) => {
+    if (!window.confirm('Esto también elimina en cascada todos los estados y zonas de este país. ¿Continuar?')) return;
     try {
-      await deleteDoc(doc(db, 'countries', id));
+      const { error } = await supabase.from('countries').delete().eq('id', id);
+      if (error) throw error;
+      onRefresh();
     } catch (err) { console.error(err); }
   };
 
   const handleDeleteState = async (id: string) => {
+    if (!window.confirm('Esto también elimina en cascada todas las zonas de este estado. ¿Continuar?')) return;
     try {
-      await deleteDoc(doc(db, 'states', id));
+      const { error } = await supabase.from('states').delete().eq('id', id);
+      if (error) throw error;
+      onRefresh();
     } catch (err) { console.error(err); }
   };
-
-  if (loading) {
-    return (
-      <div className="flex justify-center p-12">
-        <Loader2 className="animate-spin text-blue-600" size={24} />
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-8 animate-fade-in">
@@ -197,7 +144,7 @@ export default function Config() {
         <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 border-b pb-2">Estructura General de Catálogos</h3>
 
         {countries.map((country) => {
-          const countryStates = states.filter(s => s.countryId === country.id);
+          const countryStates = states.filter(s => s.country_id === country.id);
 
           return (
             <div key={country.id} className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
@@ -234,7 +181,7 @@ export default function Config() {
                         <th className="py-2 px-4 w-[15%]">Pais</th>
                         <th className="py-2 px-4 w-[15%]">CodEstado</th>
                         <th className="py-2 px-4 w-[25%]">Estado</th>
-                        <th className="py-2 px-4 w-[25%]">ID Relación Firestore</th>
+                        <th className="py-2 px-4 w-[25%]">ID Relación</th>
                         <th className="py-2 px-4 text-right w-[10%]">Acciones</th>
                       </tr>
                     </thead>
@@ -242,16 +189,16 @@ export default function Config() {
                       {countryStates.map((st) => (
                         <tr key={st.id} className="hover:bg-slate-50/60 transition-colors">
                           <td className="py-2 px-4 font-mono font-bold text-slate-600">
-                            {st.CveEstado ?? '—'}
+                            {st.cve_estado ?? '—'}
                           </td>
                           <td className="py-2 px-4 text-slate-500">
-                            {st.Pais ?? country.name}
+                            {country.name}
                           </td>
                           <td className="py-2 px-4 font-mono font-bold text-blue-600">
-                            {st.CodEstado ?? '—'}
+                            {st.cod_estado ?? '—'}
                           </td>
                           <td className="py-2 px-4 font-bold text-slate-800">
-                            {st.Estado ?? st.name}
+                            {st.name}
                           </td>
                           <td className="py-2 px-4 font-mono text-[11px] text-slate-400">
                             {st.id}

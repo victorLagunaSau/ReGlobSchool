@@ -1,17 +1,16 @@
 'use client';
 
 import React, { useState } from 'react';
-import { collection, doc, writeBatch, getDocs } from 'firebase/firestore';
-import { db } from '@/src/lib/firebase';
+import { supabase } from '../../../../../lib/supabase/client';
 import { X, Loader2 } from 'lucide-react';
 
 interface ModalCargaMasivaProps {
   isOpen: boolean;
   onClose: () => void;
-  states?: Array<{ id: string; countryId: string; name: string }>;
+  onImported: () => void;
 }
 
-export default function ModalCargaMasiva({ isOpen, onClose }: ModalCargaMasivaProps) {
+export default function ModalCargaMasiva({ isOpen, onClose, onImported }: ModalCargaMasivaProps) {
   const [bulkInput, setBulkInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [logMessage, setLogMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -26,21 +25,30 @@ export default function ModalCargaMasiva({ isOpen, onClose }: ModalCargaMasivaPr
     setLogMessage(null);
 
     const lines = bulkInput.split('\n');
-    const batch = writeBatch(db);
 
-    let currentZonesSizeMap: Record<string, number> = {};
-    let countriesCreated: Record<string, boolean> = {};
-    let statesCreated: Record<string, boolean> = {};
-
-    let addedCount = 0;
+    const countriesMap = new Map<string, { id: string; name: string }>();
+    const statesMap = new Map<string, { id: string; country_id: string; cve_estado: number; cod_estado: string; name: string }>();
+    const zoneRows: Array<{
+      id: string;
+      country_id: string;
+      state_id: string;
+      cve_municipio: number;
+      cvegeo: string;
+      city: string;
+      assigned_to: string;
+      schools_potential: number;
+      licenses_censo: number;
+    }> = [];
 
     try {
-      // 1. Mapeo de consecución limpia por estado
-      const zonesSnapshot = await getDocs(collection(db, 'zones'));
-      zonesSnapshot.docs.forEach((docSnap) => {
-        const data = docSnap.data();
-        if (data.stateId) {
-          currentZonesSizeMap[data.stateId] = (currentZonesSizeMap[data.stateId] || 0) + 1;
+      // 1. Mapeo de consecución limpia por estado, a partir de lo que ya existe en Supabase
+      const { data: existingZones, error: zonesError } = await supabase.from('zones').select('state_id');
+      if (zonesError) throw zonesError;
+
+      const currentZonesSizeMap: Record<string, number> = {};
+      (existingZones || []).forEach((z) => {
+        if (z.state_id) {
+          currentZonesSizeMap[z.state_id] = (currentZonesSizeMap[z.state_id] || 0) + 1;
         }
       });
 
@@ -53,7 +61,7 @@ export default function ModalCargaMasiva({ isOpen, onClose }: ModalCargaMasivaPr
         // Soporte para separación por coma o por tabulación
         const columns = line.includes('\t') ? line.split('\t') : line.split(',');
 
-        if (columns.length >= 19) {
+        if (columns.length >= 11) {
           const rawCveEstado = parseInt(columns[0].trim(), 10) || 0;
           const rawPais = columns[1].trim();
           const rawCodEstado = columns[2].trim().toUpperCase();
@@ -61,36 +69,27 @@ export default function ModalCargaMasiva({ isOpen, onClose }: ModalCargaMasivaPr
           const rawCveMunicipio = parseInt(columns[4].trim(), 10) || 0;
           const rawCVEGEO = columns[5].trim();
           const rawCiudad = columns[6].trim();
+          const rawAssignedTo = columns[7].trim();
+          const rawCountryId = columns[8].trim().toUpperCase();
 
           // Métricas de Censo
-          const rawSchoolsPotential = parseInt(columns[8].trim(), 10) || 0;
-          const rawLicensesCenso = parseInt(columns[9].trim(), 10) || 0;
-
-          const rawAssignedTo = columns[17].trim();
-          const rawCountryId = columns[18].trim().toUpperCase();
+          const rawSchoolsPotential = parseInt(columns[9].trim(), 10) || 0;
+          const rawLicensesCenso = parseInt(columns[10].trim(), 10) || 0;
 
           const stateId = `${rawCountryId}-${rawCodEstado}`;
 
-          // Autocreación/Aseguramiento de Catálogos Padre
-          if (!countriesCreated[rawCountryId]) {
-            batch.set(doc(db, 'countries', rawCountryId), {
-              id: rawCountryId,
-              name: rawPais
-            }, { merge: true });
-            countriesCreated[rawCountryId] = true;
+          // Autocreación/Aseguramiento de Catálogos Padre (deduplicado en memoria)
+          if (!countriesMap.has(rawCountryId)) {
+            countriesMap.set(rawCountryId, { id: rawCountryId, name: rawPais });
           }
-
-          if (!statesCreated[stateId]) {
-            batch.set(doc(db, 'states', stateId), {
+          if (!statesMap.has(stateId)) {
+            statesMap.set(stateId, {
               id: stateId,
-              countryId: rawCountryId,
-              Pais: rawPais,
-              CveEstado: rawCveEstado,
-              CodEstado: rawCodEstado,
+              country_id: rawCountryId,
+              cve_estado: rawCveEstado,
+              cod_estado: rawCodEstado,
               name: rawEstado,
-              Estado: rawEstado
-            }, { merge: true });
-            statesCreated[stateId] = true;
+            });
           }
 
           // Generar ID Limpio Consecutivo por Estado (Ej: MX-AGS-001)
@@ -99,37 +98,42 @@ export default function ModalCargaMasiva({ isOpen, onClose }: ModalCargaMasivaPr
           currentZonesSizeMap[stateId] = nextConsecutive;
 
           const zoneId = `${stateId}-${String(nextConsecutive).padStart(3, '0')}`;
-          const zoneDocRef = doc(collection(db, 'zones'), zoneId);
 
-          // Inyección atómica a Firestore
-          batch.set(zoneDocRef, {
+          zoneRows.push({
             id: zoneId,
-            countryId: rawCountryId,
-            stateId: stateId,
-            CveEstado: rawCveEstado,
-            Pais: rawPais,
-            CodEstado: rawCodEstado,
-            Estado: rawEstado,
-            CveMunicipio: rawCveMunicipio,
-            CVEGEO: rawCVEGEO,
-            Ciudad: rawCiudad,
-            city: rawCiudad, // Retrocompatibilidad
-            schoolsPotential: rawSchoolsPotential,
-            licensesCenso: rawLicensesCenso,
-            assignedTo: rawAssignedTo || 'Libre'
+            country_id: rawCountryId,
+            state_id: stateId,
+            cve_municipio: rawCveMunicipio,
+            cvegeo: rawCVEGEO,
+            city: rawCiudad,
+            schools_potential: rawSchoolsPotential,
+            licenses_censo: rawLicensesCenso,
+            assigned_to: rawAssignedTo || 'Libre',
           });
-
-          addedCount++;
         }
       }
 
-      if (addedCount > 0) {
-        await batch.commit();
-        setLogMessage({ type: 'success', text: `¡Procesamiento exitoso! Se inyectaron ${addedCount} territorios cartográficos.` });
+      if (zoneRows.length > 0) {
+        // 3. Aseguramos catálogos padre primero (países y estados referenciados por FK)
+        if (countriesMap.size > 0) {
+          const { error } = await supabase.from('countries').upsert(Array.from(countriesMap.values()), { onConflict: 'id' });
+          if (error) throw error;
+        }
+        if (statesMap.size > 0) {
+          const { error } = await supabase.from('states').upsert(Array.from(statesMap.values()), { onConflict: 'id' });
+          if (error) throw error;
+        }
+
+        // 4. Inyección de las zonas
+        const { error: insertError } = await supabase.from('zones').insert(zoneRows);
+        if (insertError) throw insertError;
+
+        setLogMessage({ type: 'success', text: `¡Procesamiento exitoso! Se inyectaron ${zoneRows.length} territorios cartográficos.` });
         setBulkInput('');
+        onImported();
         setTimeout(() => { onClose(); }, 2000);
       } else {
-        setLogMessage({ type: 'error', text: 'No se detectaron filas válidas. Revisa las 19 columnas de tu CSV.' });
+        setLogMessage({ type: 'error', text: 'No se detectaron filas válidas. Revisa las 11 columnas de tu CSV.' });
       }
 
     } catch (error) {
@@ -146,7 +150,7 @@ export default function ModalCargaMasiva({ isOpen, onClose }: ModalCargaMasivaPr
         <div className="flex justify-between items-center pb-4 border-b border-slate-100">
           <div>
             <h3 className="text-lg font-black text-slate-950">Importador Geopolítico y Censal (CSV)</h3>
-            <p className="text-xs text-slate-400">Asimilador masivo ajustado a la estructura de 19 columnas INEGI.</p>
+            <p className="text-xs text-slate-400">Asimilador masivo: CveEstado, Pais, CodEstado, Estado, CveMunicipio, CVEGEO, Ciudad, Asignado, CountryId, Escuelas Censo, Lic. Censo.</p>
           </div>
           <button onClick={onClose} disabled={isProcessing} className="text-slate-400 hover:text-slate-600">
             <X size={18} />
@@ -160,7 +164,7 @@ export default function ModalCargaMasiva({ isOpen, onClose }: ModalCargaMasivaPr
             disabled={isProcessing}
             rows={10}
             className="w-full font-mono text-[10px] p-4 border border-slate-200 rounded-xl bg-slate-50 focus:outline-blue-600 resize-none"
-            placeholder="CveEstado,Pais,CodEstado,Estado,CveMunicipio,CVEGEO,Ciudad,Canal,Escuelas Censo,Lic. Censo,..."
+            placeholder="CveEstado,Pais,CodEstado,Estado,CveMunicipio,CVEGEO,Ciudad,Asignado,CountryId,Escuelas Censo,Lic. Censo"
           />
 
           {logMessage && (

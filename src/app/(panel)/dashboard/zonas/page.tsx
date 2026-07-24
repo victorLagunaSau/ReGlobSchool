@@ -1,23 +1,40 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot } from 'firebase/firestore';
-import { db } from '@/src/lib/firebase';
+import React, { useState, useEffect, useCallback } from 'react';
+import { supabase } from '../../../../lib/supabase/client';
 import { ClipboardCopy, LayoutGrid, PlusCircle, Settings } from 'lucide-react';
 import TablaZonas from './components/TablaZonas';
 import ModalCargaMasiva from './components/ModalCargaMasiva';
 import FormRegistrarZona from './components/FormRegistrarZona';
 import Config from './components/Config';
 
-interface Country {
+export interface Country {
   id: string;
   name: string;
 }
 
-interface State {
+export interface StateRow {
   id: string;
-  countryId: string;
+  country_id: string;
+  cve_estado: number;
+  cod_estado: string;
   name: string;
+}
+
+export interface ZoneRow {
+  id: string;
+  country_id: string;
+  state_id: string;
+  cve_municipio: number;
+  cvegeo: string;
+  city: string;
+  assigned_to: string | null;
+  schools_potential: number;
+  licenses_censo: number;
+  licenses_sold: number;
+  state_name: string;
+  state_code: string;
+  country_name: string;
 }
 
 export default function ZonasPage() {
@@ -28,24 +45,55 @@ export default function ZonasPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isBulkOpen, setIsBulkOpen] = useState(false);
 
-  // Catálogos dinámicos sincronizados con Firestore en tiempo real
+  // Catálogos y zonas: fuente única de verdad en este componente, compartidos hacia abajo
   const [countries, setCountries] = useState<Country[]>([]);
-  const [states, setStates] = useState<State[]>([]);
+  const [states, setStates] = useState<StateRow[]>([]);
+  const [zones, setZones] = useState<ZoneRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchAll = useCallback(async () => {
+    const [countriesRes, statesRes, zonesRes] = await Promise.all([
+      supabase.from('countries').select('id, name').order('name'),
+      supabase.from('states').select('id, country_id, cve_estado, cod_estado, name').order('name'),
+      supabase
+        .from('zones')
+        .select('*, states(name, cod_estado, countries(name))')
+        .order('city'),
+    ]);
+
+    if (countriesRes.data) setCountries(countriesRes.data);
+    if (statesRes.data) setStates(statesRes.data);
+
+    if (zonesRes.data) {
+      setZones(
+        zonesRes.data.map((z: any) => ({
+          id: z.id,
+          country_id: z.country_id,
+          state_id: z.state_id,
+          cve_municipio: z.cve_municipio,
+          cvegeo: z.cvegeo,
+          city: z.city,
+          assigned_to: z.assigned_to,
+          schools_potential: z.schools_potential,
+          licenses_censo: z.licenses_censo,
+          licenses_sold: z.licenses_sold,
+          state_name: z.states?.name || z.state_id,
+          state_code: z.states?.cod_estado || '',
+          country_name: z.states?.countries?.name || z.country_id,
+        }))
+      );
+    }
+
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
-    const unsubscribeCountries = onSnapshot(collection(db, 'countries'), (snapshot) => {
-      setCountries(snapshot.docs.map(d => d.data() as Country));
-    });
+    fetchAll();
+  }, [fetchAll]);
 
-    const unsubscribeStates = onSnapshot(collection(db, 'states'), (snapshot) => {
-      setStates(snapshot.docs.map(d => d.data() as State));
-    });
-
-    return () => {
-      unsubscribeCountries();
-      unsubscribeStates();
-    };
-  }, []);
+  if (loading) {
+    return <div className="p-8 text-center text-slate-500 font-medium">Sincronizando catálogos y territorios...</div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -53,7 +101,7 @@ export default function ZonasPage() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-black text-slate-950 tracking-tight">Control Territorial Multi-País</h1>
-          <p className="text-xs text-slate-500">Datos y catálogos en tiempo real conectados con Firebase.</p>
+          <p className="text-xs text-slate-500">Datos y catálogos conectados con Supabase.</p>
         </div>
 
         {/* Botonera Principal Reducida */}
@@ -105,12 +153,12 @@ export default function ZonasPage() {
           </div>
 
           {/* Renderizado de la Tabla de Control */}
-          <TablaZonas countries={countries} states={states} />
+          <TablaZonas countries={countries} states={states} zones={zones} onRefresh={fetchAll} />
         </div>
       )}
 
       {activeTab === 'config' && (
-        <Config />
+        <Config countries={countries} states={states} onRefresh={fetchAll} />
       )}
 
       {/* POPUP DE REGISTRO INDIVIDUAL DE ZONA SEGMENTADA */}
@@ -119,13 +167,14 @@ export default function ZonasPage() {
         onClose={() => setIsCreateOpen(false)}
         countries={countries}
         states={states}
+        onCreated={fetchAll}
       />
 
       {/* POPUP DE CARGA MASIVA */}
       <ModalCargaMasiva
         isOpen={isBulkOpen}
         onClose={() => setIsBulkOpen(false)}
-        states={states}
+        onImported={fetchAll}
       />
     </div>
   );
