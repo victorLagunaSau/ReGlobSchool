@@ -10,6 +10,7 @@ interface MapViewProps {
     projectionConfig?: { scale: number; center: [number, number] };
     viewBox?: string;
     onStateHover?: (stateInfo: any | null) => void;
+    onStateClick?: (stateInfo: any) => void;
 }
 
 export default function MapView({
@@ -17,21 +18,19 @@ export default function MapView({
     data,
     projectionConfig = { scale: 1000, center: [-102.5528, 23.6345] },
     viewBox = "100 50 600 600",
-    onStateHover
+    onStateHover,
+    onStateClick
 }: MapViewProps) {
 
-    const getPercentage = (sold: number, total: number) => total === 0 ? 0 : (sold / total) * 100;
-
     const getColor = (item: any) => {
-        if (!item || item.licensesSold === 0) return "#cbd5e1"; // Gris para estados sin datos
+        if (!item || !item.tieneOcupacion || item.porcentajePresencia <= 0) {
+            return "#cbd5e1";
+        }
 
-        let perc = getPercentage(item.licensesSold, item.licensesCenso);
+        const perc = item.porcentajePresencia;
 
-        if (perc > 0 && perc < 10) perc = 30;
-        else if (perc >= 10 && perc < 100) perc += 20;
-        else perc = 100;
-
-        if (perc <= 40) return "#93c5fd";
+        if (perc <= 10) return "#bfdbfe";
+        if (perc <= 40) return "#60a5fa";
         if (perc <= 70) return "#3b82f6";
         return "#1d4ed8";
     };
@@ -68,6 +67,16 @@ export default function MapView({
                                     }}
                                     onMouseLeave={() => {
                                         if (onStateHover) onStateHover(null);
+                                    }}
+                                    onClick={() => {
+                                        const nombreEstado = geo.properties.NOMGEO || "Sin nombre";
+                                        if (onStateClick) {
+                                            if (stateData) {
+                                                onStateClick({ ...stateData, geoName: nombreEstado });
+                                            } else {
+                                                onStateClick({ nombre: nombreEstado, sinAsignar: true, inegi: geo.properties.CVE_ENT, properties: geo.properties });
+                                            }
+                                        }
                                     }}
                                     style={{
                                         default: { outline: "none" },
