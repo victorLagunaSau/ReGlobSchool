@@ -6,6 +6,31 @@ import { ArrowLeft, AlertTriangle, ClipboardList, MapPin, X } from 'lucide-react
 import MapView from '../../../../components/ui/MapView';
 import StateMapView from '../../../../components/ui/StateMapView';
 
+// Supabase/PostgREST limita cada respuesta a 1000 filas por default. La
+// tabla zones ya supera esa cifra a nivel nacional (2000+), así que hay que
+// paginar con .range() para traerlas todas — de lo contrario este mapa
+// nacional se queda corto de zonas para estados que caen fuera de las
+// primeras 1000 filas.
+async function fetchAllZones(): Promise<any[]> {
+    const pageSize = 1000;
+    let from = 0;
+    let allRows: any[] = [];
+
+    while (true) {
+        const { data, error } = await supabase
+            .from('zones')
+            .select('*')
+            .range(from, from + pageSize - 1);
+
+        if (error || !data) break;
+        allRows = allRows.concat(data);
+        if (data.length < pageSize) break;
+        from += pageSize;
+    }
+
+    return allRows;
+}
+
 export default function MapsPage() {
     const [countries, setCountries] = useState<any[]>([]);
     const [states, setStates] = useState<any[]>([]);
@@ -28,15 +53,15 @@ export default function MapsPage() {
     useEffect(() => {
         async function fetchData() {
             try {
-                const [countriesRes, statesRes, zonesRes] = await Promise.all([
+                const [countriesRes, statesRes, allZones] = await Promise.all([
                     supabase.from('countries').select('id, name'),
                     supabase.from('states').select('id, country_id, cve_estado, cod_estado, name'),
-                    supabase.from('zones').select('*'),
+                    fetchAllZones(),
                 ]);
 
                 setCountries(countriesRes.data || []);
                 setStates(statesRes.data || []);
-                setZones(zonesRes.data || []);
+                setZones(allZones);
             } catch (error) {
                 console.error("Error cargando datos de Supabase:", error);
             } finally {

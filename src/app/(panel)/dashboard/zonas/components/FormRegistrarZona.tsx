@@ -16,7 +16,7 @@ interface FormRegistrarZonaProps {
 export default function FormRegistrarZona({ isOpen, onClose, countries, states, onCreated }: FormRegistrarZonaProps) {
   const [selectedCountry, setSelectedCountry] = useState('MX');
   const [selectedState, setSelectedState] = useState(''); // Representa el stateId (Ej: MX-AGS)
-  const [assignedTo, setAssignedTo] = useState('Libre');
+  const [assignedTo, setAssignedTo] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
   // Campos de la Estructura Geopolítica y Cartográfica
@@ -57,7 +57,7 @@ export default function FormRegistrarZona({ isOpen, onClose, countries, states, 
         id: zoneId,
         country_id: selectedCountry,
         state_id: selectedState,
-        assigned_to: assignedTo,
+        assigned_to: assignedTo.trim() || null,
         cve_municipio: Number(cveMunicipio.trim()),
         cvegeo: cveGeo.trim(),
         city: ciudad.trim(),
@@ -163,7 +163,7 @@ export default function FormRegistrarZona({ isOpen, onClose, countries, states, 
           {/* Bloque de Operadores */}
           <div className="border-t border-slate-100 pt-1">
             <label className="block text-[11px] font-bold text-slate-500 mb-1">Asignado a</label>
-            <input type="text" value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} className="w-full border border-slate-200 rounded-lg p-2 text-xs focus:outline-blue-600" />
+            <input type="text" placeholder="Sin asignar (se llena automático desde UNEs)" value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} className="w-full border border-slate-200 rounded-lg p-2 text-xs focus:outline-blue-600" />
           </div>
 
           <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">

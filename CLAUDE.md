@@ -17,7 +17,7 @@ There is no test runner configured in this repo.
 
 ## Stack
 
-Next.js 16 (App Router) + React 19 + TypeScript, Tailwind CSS v4 (config-file based, not CSS-first), Firebase (Auth + Firestore) as the only backend, `react-simple-maps` for choropleth maps, `lucide-react` for icons.
+Next.js 16 (App Router) + React 19 + TypeScript, Tailwind CSS v4 (config-file based, not CSS-first), Supabase (Auth + Postgres, via `@supabase/ssr` + `@supabase/supabase-js`) as the only backend, `react-simple-maps` for choropleth maps, `lucide-react` for icons.
 
 **Read `node_modules/next/dist/docs/` before writing Next.js-specific code** (routing, data fetching, middleware, config) — this Next.js version has breaking changes versus older/training-data conventions.
 
@@ -25,26 +25,26 @@ Next.js 16 (App Router) + React 19 + TypeScript, Tailwind CSS v4 (config-file ba
 
 ### Route groups and auth flow
 
-- `src/app/(landing)/` — public marketing page (`/`).
 - `src/app/(auth)/login/` — `/login`, a single page that swaps between `LoginForm` / `RegisterForm` / `ResetPasswordForm` via local state (no sub-routes).
 - `src/app/(panel)/dashboard/` — the authenticated admin panel, wrapped by `src/app/(panel)/layout.tsx`.
 
-Auth state is **not** managed server-side. `src/context/AuthContext.tsx` (`AuthProvider`, mounted in the root layout) listens to Firebase `onAuthStateChanged` and mirrors login state into a plain `regoschol_session` cookie (`document.cookie`, no session token/JWT — it's just a presence flag). `src/middleware.ts` reads that cookie to gate `/dashboard/*` (redirect to `/` if absent) and to bounce logged-in users away from `/` and `/login` (redirect to `/dashboard`). Because the cookie is client-set, any real authorization check must still happen client-side against Firestore.
+The public landing page (`/`) is `src/app/page.tsx` (no route group — there is no `(landing)/` directory).
 
-On top of "logged in", `(panel)/layout.tsx` does a **second** authorization check: it reads `users/{uid}` from Firestore and only renders the panel if `authorized === true`; otherwise it shows a "pending authorization" screen. Keep this two-tier check (Firebase auth ≠ authorized admin) in mind when touching panel access logic.
+Auth state is managed by Supabase: `src/lib/supabase/client.ts` creates a browser client (`createBrowserClient`) that persists the session in cookies (not localStorage) so the server can read it too. `src/context/AuthContext.tsx` (`AuthProvider`, mounted in the root layout) calls `supabase.auth.getSession()` / `onAuthStateChange` to expose `user`/`loading`. `src/middleware.ts` calls `updateSession()` (`src/lib/supabase/middleware.ts`) on every request to refresh the Supabase session cookie and read the user, gating `/dashboard/*` (redirect to `/` if absent) and bouncing logged-in users away from `/` and `/login` (redirect to `/dashboard`).
 
-### Data model (Firestore)
+On top of "logged in", `(panel)/layout.tsx` does a **second** authorization check: it reads `profiles/{id}` (`id` = Supabase auth user id) from Postgres via `supabase.from('profiles').select(...)` and only renders the panel if `authorized === true`; otherwise it shows a "pending authorization" screen. Keep this two-tier check (Supabase auth ≠ authorized admin) in mind when touching panel access logic.
 
-No backend/API routes — pages talk to Firestore directly from client components (`'use client'` + `onSnapshot`/`getDocs`). Collections in use:
+### Data model (Supabase / Postgres)
 
-- `users/{uid}` — `{ fullName, authorized: boolean }`.
-- `countries/{id}` — id is the ISO code (e.g. `MX`), `{ name }`.
-- `states/{countryId-CODESTADO}` — e.g. id `MX-AGS`, `{ countryId, Pais, CveEstado (number, INEGI state code), CodEstado (short code), name/Estado }`.
-- `zones/{stateId-NNN}` — e.g. id `MX-AGS-001`, `{ countryId, stateId, assignedTo ("Libre" or an operator name), CveEstado, CveMunicipio (number), CVEGEO (INEGI municipality code, string), Ciudad/city, schoolsPotential, licensesCenso, licensesSold }`.
+No backend/API routes — pages talk to Postgres directly from client components via the Supabase client (`'use client'` + `supabase.from(...)`, no realtime subscriptions in use). Row Level Security applies since the browser client uses the anon key. Tables in use (snake_case columns; client code often maps them to camelCase locally):
 
-Docs read these fields defensively (multiple fallback field names, `Number()`/`String()` coercion) because the schema evolved organically — follow that pattern rather than assuming strict typing when touching this data.
+- `profiles` — `{ id (= auth user id), full_name, email, role, authorized: boolean, project, business_partner, personal_phone, office_phone, country_id, state_id }`.
+- `countries` — `{ id (ISO code, e.g. MX), name }`.
+- `states` — `{ id, country_id, cve_estado (number, INEGI state code), cod_estado (short code), name }`.
+- `zones` — `{ id, country_id, state_id, cve_municipio (number), cvegeo (INEGI municipality code, string), city, assigned_to ("Libre"/empty or an operator name), schools_potential, licenses_censo, licenses_sold }`.
+- `unes`, `une_zones`, `une_types`, `commercial_partners`, `distributions`, `distribution_contacts` — support the `dashboard/unes` module (commercial partners/distributors and their zone assignments); see `src/app/(panel)/dashboard/unes/` for current field usage before relying on this list.
 
-`assignedTo` empty string or the literal string `"libre"` (case-insensitive) both mean "unoccupied" — this check is duplicated across `MapView`, `StateMapView`, and `dashboard/maps/page.tsx`; keep them consistent if you change the rule.
+`assigned_to` empty string or the literal string `"libre"` (case-insensitive) both mean "unoccupied" — this check is duplicated across `MapView`, `StateMapView`, and `dashboard/maps/page.tsx`; keep them consistent if you change the rule.
 
 ### Maps
 
@@ -52,7 +52,7 @@ Docs read these fields defensively (multiple fallback field names, `Number()`/`S
 
 ### Import aliases
 
-`tsconfig.json` maps `@/*` to the **project root**, not `src/`. Existing code is inconsistent: some files use `@/src/lib/firebase`, others use relative paths (`'../../../lib/firebase'`). Prefer the `@/src/...` form for new code since it isn't dependent on nesting depth.
+`tsconfig.json` maps `@/*` to the **project root**, not `src/`. Existing code is inconsistent: some files use `@/src/lib/supabase/client`, others use relative paths (`'../../../lib/supabase/client'`). Prefer the `@/src/...` form for new code since it isn't dependent on nesting depth.
 
 ## Notes
 

@@ -11,6 +11,11 @@ interface StateMapViewProps {
     zonesData: any[];     // Arreglo de zonas filtradas para este estado
     onZoneHover?: (zoneInfo: any | null) => void;
     onZoneClick?: (zoneInfo: any) => void;
+    // Modo selección interactiva (usado por el selector de zonas de UNEs):
+    // si se provee, las zonas cuyo id está en el set se pintan de azul
+    // (seleccionada) y las ya asignadas a alguna UNE se pintan de ámbar
+    // (advertencia), en vez del azul "ocupado" del modo de solo lectura.
+    selectedZoneIds?: Set<string>;
 }
 
 // Dimensión base usada para derivar el ancho/alto del viewBox según la proporción real del estado
@@ -30,7 +35,8 @@ export default function StateMapView({
     geoUrl,
     zonesData,
     onZoneHover,
-    onZoneClick
+    onZoneClick,
+    selectedZoneIds
 }: StateMapViewProps) {
 
     // Cada estado tiene coordenadas y proporciones distintas (algunos muy alargados,
@@ -88,14 +94,19 @@ export default function StateMapView({
         if (!matchedZone) return "#e2e8f0"; // Gris si no existe
 
         const val = matchedZone.assignedTo;
-        if (!val) return "#e2e8f0";
+        const cleanVal = val ? String(val).trim().toLowerCase() : "";
+        const isOcupada = cleanVal !== "" && cleanVal !== "libre";
 
-        const cleanVal = String(val).trim().toLowerCase();
-        if (cleanVal === "" || cleanVal === "libre") {
-            return "#e2e8f0"; // Gris neutro (Libre)
+        // Modo selección interactiva: azul = seleccionada, ámbar = ya asignada
+        // a otra UNE (advertencia, no bloquea), gris = libre.
+        if (selectedZoneIds) {
+            if (matchedZone.id && selectedZoneIds.has(matchedZone.id)) return "#2563eb";
+            if (isOcupada) return "#f59e0b";
+            return "#e2e8f0";
         }
 
-        return "#2563eb"; // Azul Comercial (Ocupado)
+        // Modo de solo lectura (dashboard/maps): comportamiento original.
+        return isOcupada ? "#2563eb" : "#e2e8f0";
     };
 
     return (

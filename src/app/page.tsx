@@ -9,7 +9,7 @@ export default function LandingPage() {
   const router = useRouter();
 
   useEffect(() => {
-    // Si la sesión terminó de cargar en Firebase y encuentra un usuario activo
+    // Si la sesión terminó de cargar y encuentra un usuario activo
     if (!loading && user) {
       // Lo manda directo a su área de trabajo
       router.push('/dashboard');
@@ -21,7 +21,7 @@ export default function LandingPage() {
     router.replace('/login');
   };
 
-  // Pantalla de carga limpia con tu color oscuro corporativo mientras el Contexto despierta
+  // Pantalla de carga limpia con tu color oscuro corporativo mientras el contexto de autenticación despierta
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-dark-bg">

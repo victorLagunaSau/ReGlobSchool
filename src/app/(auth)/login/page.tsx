@@ -40,7 +40,7 @@ export default function LoginPage() {
     setToastOpen(true);
   };
 
-  // Pantalla de carga limpia mientras se verifica el estado de Firebase en la entrada
+  // Pantalla de carga limpia mientras se verifica el estado de sesión en la entrada
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-dark-bg">
