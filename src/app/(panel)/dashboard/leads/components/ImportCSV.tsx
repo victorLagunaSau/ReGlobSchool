@@ -113,6 +113,14 @@ export default function ImportCSV({ isOpen, onClose, zones, onImported }: Import
 
         if (!leadError && newLead) {
           await supabase.from('lead_imports').update({ status: 'imported', lead_id: newLead.id }).eq('id', staged.id);
+          await supabase.from('lead_tasks').insert({
+            lead_id: newLead.id,
+            task_type: 'contacto_inicial',
+            channel: 'ambos',
+            description: 'Contacto inicial',
+            scheduled_for: new Date().toISOString(),
+            status: 'pendiente',
+          });
           importedCount++;
         }
       }

@@ -190,7 +190,8 @@ export default function Config({ partners, distributions, distributionContacts, 
                       <button onClick={() => toggleDistSort('partner', 'desc')} className={`p-0.5 rounded ${distSortColumn === 'partner' && distSortDirection === 'desc' ? 'text-blue-600' : 'text-slate-300 hover:text-slate-500'}`} title="Ordenar Z-A"><ChevronUp size={11} /></button>
                     </span>
                   </th>
-                  <th className="py-2 px-4 text-right w-[15%]">Acciones</th>
+                  <th className="py-2 px-4 w-[20%]">Redes Sociales</th>
+                  <th className="py-2 px-4 text-right w-[10%]">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
@@ -219,6 +220,21 @@ export default function Config({ partners, distributions, distributionContacts, 
                         ) : '—'}
                       </td>
                       <td className="py-2 px-4 text-slate-500">{partner?.company_name || '—'}</td>
+                      <td className="py-2 px-4">
+                        {d.social_media_urls && Array.isArray(d.social_media_urls) && d.social_media_urls.length > 0 ? (
+                          <ul className="space-y-1">
+                            {d.social_media_urls.map((social: any, idx: number) => (
+                              <li key={idx}>
+                                <a href={social.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 hover:underline text-[9px] font-semibold">
+                                  {social.name} ↗
+                                </a>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </td>
                       <td className="py-2 px-4 text-right">
                         <div className="flex justify-end gap-1">
                           <button
@@ -271,10 +287,12 @@ export default function Config({ partners, distributions, distributionContacts, 
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                  <th className="py-2 px-4 w-[35%]">Empresa</th>
-                  <th className="py-2 px-4 w-[30%]">Responsable</th>
-                  <th className="py-2 px-4 w-[20%]">Teléfono</th>
-                  <th className="py-2 px-4 text-right w-[15%]">Acciones</th>
+                  <th className="py-2 px-4 w-[25%]">Empresa</th>
+                  <th className="py-2 px-4 w-[20%]">Responsable</th>
+                  <th className="py-2 px-4 w-[12%]">Teléfono</th>
+                  <th className="py-2 px-4 w-[12%]">Sitio Web</th>
+                  <th className="py-2 px-4 w-[15%]">Redes Sociales</th>
+                  <th className="py-2 px-4 text-right w-[16%]">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
@@ -296,6 +314,41 @@ export default function Config({ partners, distributions, distributionContacts, 
                         {isEditing ? (
                           <input value={editPartnerForm?.phone || ''} onChange={(e) => setEditPartnerForm((f) => f && { ...f, phone: e.target.value })} className="w-full border border-blue-300 rounded px-2 py-1 text-xs" />
                         ) : p.phone}
+                      </td>
+                      <td className="py-2 px-4">
+                        {p.website_url ? (
+                          <a
+                            href={p.website_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:text-blue-800 hover:underline truncate inline-block max-w-full"
+                            title={p.website_url}
+                          >
+                            Sitio Web
+                          </a>
+                        ) : (
+                          <span className="text-slate-300">—</span>
+                        )}
+                      </td>
+                      <td className="py-2 px-4">
+                        {Array.isArray(p.social_media_urls) && p.social_media_urls.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {p.social_media_urls.map((social, idx) => (
+                              <a
+                                key={idx}
+                                href={social.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-[9px] px-2 py-0.5 bg-slate-100 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                title={social.name}
+                              >
+                                {social.name}
+                              </a>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-slate-300">—</span>
+                        )}
                       </td>
                       <td className="py-2 px-4 text-right">
                         {isEditing ? (
@@ -433,6 +486,8 @@ function ModalSocioComercial({ isOpen, onClose, onCreated }: { isOpen: boolean; 
   const [companyName, setCompanyName] = useState('');
   const [contactName, setContactName] = useState('');
   const [phone, setPhone] = useState('');
+  const [websiteUrl, setWebsiteUrl] = useState('');
+  const [socialMediaUrls, setSocialMediaUrls] = useState<Array<{ name: string; url: string }>>([]);
   const [isSaving, setIsSaving] = useState(false);
 
   if (!isOpen) return null;
@@ -447,11 +502,15 @@ function ModalSocioComercial({ isOpen, onClose, onCreated }: { isOpen: boolean; 
         company_name: companyName.trim(),
         contact_name: contactName.trim(),
         phone: phone.trim(),
+        website_url: websiteUrl.trim() || null,
+        social_media_urls: socialMediaUrls.filter(s => s.name.trim() && s.url.trim()),
       });
       if (error) throw error;
       setCompanyName('');
       setContactName('');
       setPhone('');
+      setWebsiteUrl('');
+      setSocialMediaUrls([]);
       onCreated();
       onClose();
     } catch (err) {
@@ -485,6 +544,52 @@ function ModalSocioComercial({ isOpen, onClose, onCreated }: { isOpen: boolean; 
               <input type="text" placeholder="55 0000 0000" value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full border rounded-lg p-2 text-xs focus:outline-blue-600" />
             </div>
           </div>
+
+          <div className="border-t border-slate-100 pt-3 mt-3">
+            <label className="block text-[10px] font-bold text-slate-400 mb-2">Sitio Web y Redes Sociales (opcional)</label>
+            <div className="space-y-2">
+              <input type="url" placeholder="https://example.com" value={websiteUrl} onChange={(e) => setWebsiteUrl(e.target.value)} className="w-full border rounded-lg p-2 text-xs focus:outline-blue-600" />
+
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-[9px] font-bold text-slate-400">Redes Sociales</span>
+                  <button
+                    type="button"
+                    onClick={() => setSocialMediaUrls([...socialMediaUrls, { name: '', url: '' }])}
+                    className="text-[9px] font-bold text-blue-600 hover:text-blue-800"
+                  >
+                    + Agregar
+                  </button>
+                </div>
+                {socialMediaUrls.map((social, idx) => (
+                  <div key={idx} className="flex gap-1 mb-1">
+                    <input
+                      type="text"
+                      placeholder="Facebook, Instagram..."
+                      value={social.name}
+                      onChange={(e) => setSocialMediaUrls(socialMediaUrls.map((s, i) => i === idx ? { ...s, name: e.target.value } : s))}
+                      className="flex-1 border rounded px-2 py-1 text-[10px] focus:outline-blue-600"
+                    />
+                    <input
+                      type="url"
+                      placeholder="https://..."
+                      value={social.url}
+                      onChange={(e) => setSocialMediaUrls(socialMediaUrls.map((s, i) => i === idx ? { ...s, url: e.target.value } : s))}
+                      className="flex-1 border rounded px-2 py-1 text-[10px] focus:outline-blue-600"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setSocialMediaUrls(socialMediaUrls.filter((_, i) => i !== idx))}
+                      className="p-1 text-slate-300 hover:text-rose-500"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={onClose} disabled={isSaving} className="px-4 py-2 border rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-50">Cancelar</button>
             <button type="submit" disabled={isSaving} className="px-5 py-2 bg-blue-600 text-white font-semibold rounded-lg text-xs hover:bg-blue-700 flex items-center gap-2">

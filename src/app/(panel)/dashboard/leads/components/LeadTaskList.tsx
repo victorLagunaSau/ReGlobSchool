@@ -2,15 +2,21 @@
 
 import React, { useState } from 'react';
 import { supabase } from '../../../../../lib/supabase/client';
-import { Phone, Mail, ListChecks, Plus, Check, Clock, X, Loader2 } from 'lucide-react';
+import { Phone, Mail, Users, Video, Plus, Clock, Loader2, CheckCircle2 } from 'lucide-react';
+import TaskActions from './TaskActions';
+import type { ResolvableTask } from '../../../../../lib/task-automation';
 
 export interface LeadTaskRow {
   id: string;
-  task_type: 'llamada' | 'email' | 'seguimiento';
+  task_type: 'contacto_inicial' | 'seguimiento' | 'demo';
+  channel: 'telefono' | 'email' | 'ambos' | null;
+  attempt_number: number;
+  modality: 'virtual' | 'presencial' | null;
   description: string | null;
   scheduled_for: string | null;
   completed_at: string | null;
   status: 'pendiente' | 'completado' | 'postergado';
+  result: 'aceptado' | 'rechazado' | 'sin_respuesta' | null;
   outcome: string | null;
   created_at: string;
 }
@@ -21,26 +27,27 @@ interface LeadTaskListProps {
   onRefresh: () => void;
 }
 
-const TASK_ICONS = {
-  llamada: Phone,
-  email: Mail,
-  seguimiento: ListChecks,
+const CHANNEL_ICONS = { telefono: Phone, email: Mail, ambos: Users } as const;
+
+const RESULT_LABELS: Record<string, string> = {
+  aceptado: 'Aceptó',
+  rechazado: 'Rechazó',
+  sin_respuesta: 'Sin respuesta',
 };
 
-const TASK_LABELS: Record<string, string> = {
-  llamada: 'Llamada',
-  email: 'Email',
-  seguimiento: 'Seguimiento',
-};
+function taskLabel(task: LeadTaskRow) {
+  if (task.task_type === 'demo') return 'Demostración de Producto';
+  if (task.task_type === 'contacto_inicial') return 'Contacto Inicial';
+  return `Seguimiento — Intento ${task.attempt_number}`;
+}
 
 export default function LeadTaskList({ leadId, tasks, onRefresh }: LeadTaskListProps) {
   const [isAdding, setIsAdding] = useState(false);
-  const [taskType, setTaskType] = useState<'llamada' | 'email' | 'seguimiento'>('llamada');
+  const [taskType, setTaskType] = useState<'contacto_inicial' | 'seguimiento' | 'demo'>('contacto_inicial');
   const [description, setDescription] = useState('');
   const [scheduledFor, setScheduledFor] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-  const [resolvingId, setResolvingId] = useState<string | null>(null);
-  const [outcomeDraft, setOutcomeDraft] = useState('');
+  const [markingDoneId, setMarkingDoneId] = useState<string | null>(null);
 
   const handleAddTask = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,6 +56,7 @@ export default function LeadTaskList({ leadId, tasks, onRefresh }: LeadTaskListP
       const { error } = await supabase.from('lead_tasks').insert({
         lead_id: leadId,
         task_type: taskType,
+        channel: taskType === 'demo' ? null : 'ambos',
         description: description.trim() || null,
         scheduled_for: scheduledFor ? new Date(scheduledFor).toISOString() : null,
       });
@@ -64,23 +72,14 @@ export default function LeadTaskList({ leadId, tasks, onRefresh }: LeadTaskListP
     }
   };
 
-  const handleResolve = async (taskId: string, status: 'completado' | 'postergado') => {
+  const handleMarkDemoDone = async (taskId: string) => {
+    setMarkingDoneId(taskId);
     const { error } = await supabase
       .from('lead_tasks')
-      .update({
-        status,
-        completed_at: status === 'completado' ? new Date().toISOString() : null,
-        outcome: outcomeDraft.trim() || null,
-      })
+      .update({ status: 'completado', completed_at: new Date().toISOString() })
       .eq('id', taskId);
-
-    if (error) {
-      console.error('Error al actualizar tarea:', error);
-      return;
-    }
-    setResolvingId(null);
-    setOutcomeDraft('');
-    onRefresh();
+    if (!error) onRefresh();
+    setMarkingDoneId(null);
   };
 
   const sortedTasks = [...tasks].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
@@ -100,10 +99,10 @@ export default function LeadTaskList({ leadId, tasks, onRefresh }: LeadTaskListP
       {isAdding && (
         <form onSubmit={handleAddTask} className="p-4 bg-slate-50/60 border-b border-slate-100 space-y-2">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <select value={taskType} onChange={(e) => setTaskType(e.target.value as 'llamada' | 'email' | 'seguimiento')} className="w-full border border-slate-200 rounded-lg p-2 text-xs bg-white focus:outline-blue-600">
-              <option value="llamada">Llamada</option>
-              <option value="email">Email</option>
+            <select value={taskType} onChange={(e) => setTaskType(e.target.value as 'contacto_inicial' | 'seguimiento' | 'demo')} className="w-full border border-slate-200 rounded-lg p-2 text-xs bg-white focus:outline-blue-600">
+              <option value="contacto_inicial">Contacto Inicial</option>
               <option value="seguimiento">Seguimiento</option>
+              <option value="demo">Demostración</option>
             </select>
             <input
               type="datetime-local"
@@ -114,7 +113,7 @@ export default function LeadTaskList({ leadId, tasks, onRefresh }: LeadTaskListP
           </div>
           <input
             type="text"
-            placeholder="Descripción (ej. Llamada 2 de seguimiento)"
+            placeholder="Descripción (opcional)"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             className="w-full border border-slate-200 rounded-lg p-2 text-xs bg-white focus:outline-blue-600"
@@ -133,8 +132,7 @@ export default function LeadTaskList({ leadId, tasks, onRefresh }: LeadTaskListP
       ) : (
         <div className="divide-y divide-slate-100 max-h-[480px] overflow-y-auto">
           {sortedTasks.map((task) => {
-            const Icon = TASK_ICONS[task.task_type];
-            const isResolving = resolvingId === task.id;
+            const Icon = task.task_type === 'demo' ? Video : task.channel ? CHANNEL_ICONS[task.channel] : Users;
 
             return (
               <div key={task.id} className="p-4 space-y-2">
@@ -144,8 +142,11 @@ export default function LeadTaskList({ leadId, tasks, onRefresh }: LeadTaskListP
                       <Icon size={13} />
                     </div>
                     <div>
-                      <div className="text-xs font-bold text-slate-800">{TASK_LABELS[task.task_type]}</div>
+                      <div className="text-xs font-bold text-slate-800">{taskLabel(task)}</div>
                       {task.description && <div className="text-[11px] text-slate-500">{task.description}</div>}
+                      {task.task_type === 'demo' && task.modality && (
+                        <div className="text-[10px] text-slate-500 capitalize">{task.modality}</div>
+                      )}
                       {task.scheduled_for && (
                         <div className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5">
                           <Clock size={10} /> Programada: {new Date(task.scheduled_for).toLocaleString('es-MX')}
@@ -157,44 +158,30 @@ export default function LeadTaskList({ leadId, tasks, onRefresh }: LeadTaskListP
 
                   <span
                     className={`px-2 py-0.5 rounded text-[9px] font-bold shrink-0 ${
-                      task.status === 'completado'
-                        ? 'bg-emerald-100 text-emerald-700'
-                        : task.status === 'postergado'
-                        ? 'bg-amber-100 text-amber-700'
-                        : 'bg-slate-100 text-slate-500'
+                      task.status === 'completado' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
                     }`}
                   >
-                    {task.status === 'completado' ? 'Completado' : task.status === 'postergado' ? 'Postergado' : 'Pendiente'}
+                    {task.status === 'completado' ? (task.result ? RESULT_LABELS[task.result] : 'Completado') : 'Pendiente'}
                   </span>
                 </div>
 
                 {task.status === 'pendiente' && (
-                  isResolving ? (
-                    <div className="pl-8 space-y-1.5">
-                      <input
-                        type="text"
-                        placeholder="Nota de resultado (opcional)"
-                        value={outcomeDraft}
-                        onChange={(e) => setOutcomeDraft(e.target.value)}
-                        className="w-full border border-slate-200 rounded-lg p-1.5 text-[11px] focus:outline-blue-600"
+                  <div className="pl-8">
+                    {task.task_type === 'demo' ? (
+                      <button
+                        onClick={() => handleMarkDemoDone(task.id)}
+                        disabled={markingDoneId === task.id}
+                        className="flex items-center gap-1 px-2.5 py-1 bg-emerald-600 text-white rounded-md text-[10px] font-bold hover:bg-emerald-700 disabled:opacity-50"
+                      >
+                        {markingDoneId === task.id ? <Loader2 size={11} className="animate-spin" /> : <CheckCircle2 size={11} />} Marcar como realizada
+                      </button>
+                    ) : (
+                      <TaskActions
+                        task={{ id: task.id, lead_id: leadId, task_type: task.task_type, channel: task.channel, attempt_number: task.attempt_number } as ResolvableTask}
+                        onResolved={onRefresh}
                       />
-                      <div className="flex gap-1.5">
-                        <button onClick={() => handleResolve(task.id, 'completado')} className="flex items-center gap-1 px-2 py-1 bg-emerald-600 text-white rounded-md text-[10px] font-semibold hover:bg-emerald-700">
-                          <Check size={11} /> Completado
-                        </button>
-                        <button onClick={() => handleResolve(task.id, 'postergado')} className="flex items-center gap-1 px-2 py-1 bg-amber-500 text-white rounded-md text-[10px] font-semibold hover:bg-amber-600">
-                          <Clock size={11} /> Postergar
-                        </button>
-                        <button onClick={() => { setResolvingId(null); setOutcomeDraft(''); }} className="px-2 py-1 text-slate-400 hover:bg-slate-100 rounded-md text-[10px]">
-                          <X size={11} />
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <button onClick={() => setResolvingId(task.id)} className="pl-8 text-[10px] font-bold text-blue-600 hover:text-blue-700">
-                      Marcar resultado
-                    </button>
-                  )
+                    )}
+                  </div>
                 )}
               </div>
             );

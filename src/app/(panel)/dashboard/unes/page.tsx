@@ -42,6 +42,8 @@ export interface CommercialPartner {
   company_name: string;
   contact_name: string;
   phone: string;
+  website_url: string | null;
+  social_media_urls: Array<{ name: string; url: string }> | null;
 }
 
 export interface Distribution {
@@ -52,6 +54,8 @@ export interface Distribution {
   country_id: string | null;
   state_id: string | null;
   commercial_partner_id: string | null;
+  website_url: string | null;
+  social_media_urls: Array<{ name: string; url: string }> | null;
 }
 
 export interface DistributionContact {
@@ -113,8 +117,8 @@ export default function UnesPage() {
     const [countriesRes, statesRes, partnersRes, distributionsRes, contactsRes, uneTypesRes, unesRes] = await Promise.all([
       supabase.from('countries').select('id, name').order('name'),
       supabase.from('states').select('id, country_id, cve_estado, name').order('name'),
-      supabase.from('commercial_partners').select('id, company_name, contact_name, phone').order('company_name'),
-      supabase.from('distributions').select('id, name, address, phone, country_id, state_id, commercial_partner_id').order('name'),
+      supabase.from('commercial_partners').select('id, company_name, contact_name, phone, website_url, social_media_urls').order('company_name'),
+      supabase.from('distributions').select('id, name, address, phone, country_id, state_id, commercial_partner_id, website_url, social_media_urls').order('name'),
       supabase.from('distribution_contacts').select('id, distribution_id, full_name, email, phone, position, role, is_admin').order('created_at'),
       supabase.from('une_types').select('id, clave, titulo, descripcion').order('titulo'),
       supabase

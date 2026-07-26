@@ -11,6 +11,7 @@ export interface LeadInitialData {
   phone?: string;
   email?: string;
   address?: string;
+  website?: string;
   country_id?: string;
   state_id?: string;
   zone_id?: string;
@@ -33,6 +34,7 @@ export default function FormRegistrarLead({ isOpen, onClose, countries, states, 
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [address, setAddress] = useState('');
+  const [website, setWebsite] = useState('');
   const [selectedCountry, setSelectedCountry] = useState('MX');
   const [selectedState, setSelectedState] = useState('');
   const [selectedZone, setSelectedZone] = useState('');
@@ -45,6 +47,7 @@ export default function FormRegistrarLead({ isOpen, onClose, countries, states, 
     setPhone(initialData.phone || '');
     setEmail(initialData.email || '');
     setAddress(initialData.address || '');
+    setWebsite(initialData.website || '');
     if (initialData.country_id) setSelectedCountry(initialData.country_id);
     if (initialData.state_id) setSelectedState(initialData.state_id);
     if (initialData.zone_id) setSelectedZone(initialData.zone_id);
@@ -61,6 +64,7 @@ export default function FormRegistrarLead({ isOpen, onClose, countries, states, 
     setPhone('');
     setEmail('');
     setAddress('');
+    setWebsite('');
     setSelectedState('');
     setSelectedZone('');
   };
@@ -74,19 +78,34 @@ export default function FormRegistrarLead({ isOpen, onClose, countries, states, 
     setIsSaving(true);
 
     try {
-      const { error } = await supabase.from('leads').insert({
-        business_name: businessName.trim(),
-        business_type: businessType.trim(),
-        phone: phone.trim() || null,
-        email: email.trim() || null,
-        address: address.trim() || null,
-        country_id: selectedCountry || null,
-        state_id: selectedState || null,
-        zone_id: selectedZone || null,
-        source,
-      });
+      const { data: newLead, error } = await supabase
+        .from('leads')
+        .insert({
+          business_name: businessName.trim(),
+          business_type: businessType.trim(),
+          phone: phone.trim() || null,
+          email: email.trim() || null,
+          address: address.trim() || null,
+          website: website.trim() || null,
+          country_id: selectedCountry || null,
+          state_id: selectedState || null,
+          zone_id: selectedZone || null,
+          source,
+        })
+        .select('id')
+        .single();
 
       if (error) throw error;
+
+      // Todo lead nuevo entra de inmediato a "Mis Tareas" con su primer contacto.
+      await supabase.from('lead_tasks').insert({
+        lead_id: newLead.id,
+        task_type: 'contacto_inicial',
+        channel: 'ambos',
+        description: 'Contacto inicial',
+        scheduled_for: new Date().toISOString(),
+        status: 'pendiente',
+      });
 
       resetForm();
       onCreated();
@@ -145,6 +164,11 @@ export default function FormRegistrarLead({ isOpen, onClose, countries, states, 
             <div>
               <label className="block text-[10px] font-bold text-slate-500 mb-1">Dirección</label>
               <input type="text" placeholder="Calle, número, colonia" value={address} onChange={(e) => setAddress(e.target.value)} className="w-full border border-slate-200 rounded-lg p-2 text-xs bg-white focus:outline-blue-600" />
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 mb-1">Sitio Web</label>
+              <input type="text" placeholder="https://negocio.com" value={website} onChange={(e) => setWebsite(e.target.value)} className="w-full border border-slate-200 rounded-lg p-2 text-xs bg-white focus:outline-blue-600" />
             </div>
           </div>
 

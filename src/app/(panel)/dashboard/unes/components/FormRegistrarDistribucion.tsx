@@ -49,6 +49,10 @@ export default function FormRegistrarDistribucion({ isOpen, onClose, partners, c
   const [collaborators, setCollaborators] = useState<DistributionContact[]>([]);
   const [originalCollaboratorIds, setOriginalCollaboratorIds] = useState<string[]>([]);
 
+  // Sitio web y redes sociales
+  const [websiteUrl, setWebsiteUrl] = useState('');
+  const [socialMediaUrls, setSocialMediaUrls] = useState<Array<{ name: string; url: string }>>([]);
+
   const resetForm = () => {
     setName('');
     setAddress('');
@@ -63,6 +67,8 @@ export default function FormRegistrarDistribucion({ isOpen, onClose, partners, c
     setPrincipalPosition('');
     setCollaborators([]);
     setOriginalCollaboratorIds([]);
+    setWebsiteUrl('');
+    setSocialMediaUrls([]);
     setShowConfirm(false);
   };
 
@@ -87,6 +93,8 @@ export default function FormRegistrarDistribucion({ isOpen, onClose, partners, c
       setPrincipalPosition(principal?.position || '');
       setCollaborators(cols.map((c) => ({ ...c })));
       setOriginalCollaboratorIds(cols.map((c) => c.id).filter((id): id is string => Boolean(id)));
+      setWebsiteUrl(editing.distribution.website_url ?? '');
+      setSocialMediaUrls(Array.isArray(editing.distribution.social_media_urls) ? editing.distribution.social_media_urls : []);
     } else {
       resetForm();
     }
@@ -133,6 +141,8 @@ export default function FormRegistrarDistribucion({ isOpen, onClose, partners, c
             country_id: countryId || null,
             state_id: stateId || null,
             commercial_partner_id: partnerId || null,
+            website_url: websiteUrl.trim() || null,
+            social_media_urls: socialMediaUrls.filter(s => s.name.trim() && s.url.trim()),
           })
           .eq('id', distributionId);
         if (distError) throw distError;
@@ -203,6 +213,8 @@ export default function FormRegistrarDistribucion({ isOpen, onClose, partners, c
             country_id: countryId || null,
             state_id: stateId || null,
             commercial_partner_id: partnerId || null,
+            website_url: websiteUrl.trim() || null,
+            social_media_urls: socialMediaUrls.filter(s => s.name.trim() && s.url.trim()),
           })
           .select('id')
           .single();
@@ -364,6 +376,61 @@ export default function FormRegistrarDistribucion({ isOpen, onClose, partners, c
                 ))}
               </div>
             )}
+          </div>
+
+          {/* SITIO WEB Y REDES SOCIALES */}
+          <div className="bg-slate-50/40 p-3 rounded-xl border border-slate-100 space-y-3">
+            <label className="block text-[11px] font-black uppercase tracking-wider text-slate-700">Sitio Web y Redes Sociales</label>
+
+            <div>
+              <label className="block text-[10px] font-bold text-slate-400 mb-1">Sitio Web (opcional)</label>
+              <input type="url" placeholder="https://example.com" value={websiteUrl} onChange={(e) => setWebsiteUrl(e.target.value)} className="w-full border rounded-lg p-2 text-xs focus:outline-blue-600" />
+            </div>
+
+            <div>
+              <div className="flex justify-between items-center mb-2">
+                <label className="text-[10px] font-bold text-slate-400">Redes Sociales (opcional)</label>
+                <button
+                  type="button"
+                  onClick={() => setSocialMediaUrls([...socialMediaUrls, { name: '', url: '' }])}
+                  className="flex items-center gap-1 text-[10px] font-bold text-blue-600 hover:text-blue-800"
+                >
+                  <PlusCircle size={12} /> Agregar Red Social
+                </button>
+              </div>
+
+              {socialMediaUrls.length === 0 ? (
+                <p className="text-[10px] text-slate-400 italic">Sin redes sociales agregadas.</p>
+              ) : (
+                <div className="space-y-2">
+                  {socialMediaUrls.map((social, idx) => (
+                    <div key={idx} className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Facebook, Instagram, LinkedIn, TikTok, etc."
+                        value={social.name}
+                        onChange={(e) => setSocialMediaUrls(socialMediaUrls.map((s, i) => i === idx ? { ...s, name: e.target.value } : s))}
+                        className="flex-1 border rounded-lg p-2 text-xs focus:outline-blue-600"
+                      />
+                      <input
+                        type="url"
+                        placeholder="https://..."
+                        value={social.url}
+                        onChange={(e) => setSocialMediaUrls(socialMediaUrls.map((s, i) => i === idx ? { ...s, url: e.target.value } : s))}
+                        className="flex-1 border rounded-lg p-2 text-xs focus:outline-blue-600"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setSocialMediaUrls(socialMediaUrls.filter((_, i) => i !== idx))}
+                        className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-md"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           {showConfirm ? (

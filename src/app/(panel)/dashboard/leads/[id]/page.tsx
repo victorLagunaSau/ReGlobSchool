@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { supabase } from '../../../../../lib/supabase/client';
-import { ArrowLeft, Building2, Phone, Mail, MapPin } from 'lucide-react';
+import { ArrowLeft, Building2, Phone, Mail, MapPin, Globe } from 'lucide-react';
 import LeadTaskList, { type LeadTaskRow } from '../components/LeadTaskList';
 import EmailComposer from '../components/EmailComposer';
 import ScoreChecklist, { type LeadScoreStep } from '../components/ScoreChecklist';
@@ -17,9 +17,10 @@ interface LeadDetail {
   phone: string | null;
   email: string | null;
   address: string | null;
+  website: string | null;
   status: string;
   source: string;
-  assigned_to: string | null;
+  created_at: string;
   score_percent: number;
   zone_city: string | null;
   state_name: string | null;
@@ -63,9 +64,10 @@ export default function LeadDetailPage() {
       phone: data.phone,
       email: data.email,
       address: data.address,
+      website: data.website,
       status: data.status,
       source: data.source,
-      assigned_to: data.assigned_to,
+      created_at: data.created_at,
       score_percent: data.score_percent || 0,
       zone_city: data.zones?.city || null,
       state_name: data.states?.name || null,
@@ -141,6 +143,11 @@ export default function LeadDetailPage() {
           <span className="font-semibold text-slate-700">{lead.business_type}</span>
           {lead.phone && <span className="flex items-center gap-1"><Phone size={11} className="text-slate-400" /> {lead.phone}</span>}
           {lead.email && <span className="flex items-center gap-1"><Mail size={11} className="text-slate-400" /> {lead.email}</span>}
+          {lead.website && (
+            <a href={lead.website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-blue-600 hover:underline">
+              <Globe size={11} className="text-slate-400" /> {lead.website}
+            </a>
+          )}
           {lead.address && <span>{lead.address}</span>}
         </div>
 
@@ -156,12 +163,12 @@ export default function LeadDetailPage() {
             <p className="text-sm font-bold text-slate-800">{lead.state_name || '—'}{lead.country_name ? `, ${lead.country_name}` : ''}</p>
           </div>
           <div className="bg-slate-50 rounded-lg p-3">
-            <p className="text-[9px] font-bold uppercase text-slate-400">Agente Asignado</p>
-            <p className="text-sm font-bold text-slate-800">{lead.assigned_to || 'Sin asignar'}</p>
-          </div>
-          <div className="bg-slate-50 rounded-lg p-3">
             <p className="text-[9px] font-bold uppercase text-slate-400">Fuente</p>
             <p className="text-sm font-bold text-slate-800 capitalize">{lead.source}</p>
+          </div>
+          <div className="bg-slate-50 rounded-lg p-3">
+            <p className="text-[9px] font-bold uppercase text-slate-400">Creado</p>
+            <p className="text-sm font-bold text-slate-800">{new Date(lead.created_at).toLocaleDateString('es-MX')}</p>
           </div>
         </div>
       </div>

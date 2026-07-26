@@ -1,0 +1,167 @@
+'use client';
+
+import React, { useState, useMemo } from 'react';
+import Link from 'next/link';
+import { supabase } from '../../../../../lib/supabase/client';
+import { Search, MapPin, Phone, Mail, Globe } from 'lucide-react';
+import { scoreStyle } from '../../../../../lib/lead-score';
+import type { LeadRow, StateRow, PipelineStage, DEFAULT_LEAD_STATUSES } from '../page';
+import { DEFAULT_LEAD_STATUSES as DEFAULTS } from '../page';
+
+interface LeadsKanbanProps {
+  leads: LeadRow[];
+  states: StateRow[];
+  stages: PipelineStage[];
+  onRefresh: () => void;
+}
+
+const COLUMN_ACCENTS: Record<string, string> = {
+  prospecto: 'border-t-slate-400',
+  llamada: 'border-t-amber-400',
+  negociacion: 'border-t-blue-500',
+  sociedad_comercial: 'border-t-emerald-500',
+  descartado: 'border-t-rose-400',
+};
+
+const SOURCE_LABELS: Record<string, string> = {
+  manual: 'Manual',
+  denue: 'DENUE',
+  google_maps: 'Google Maps',
+  csv: 'CSV',
+};
+
+export default function LeadsKanban({ leads, states, stages, onRefresh }: LeadsKanbanProps) {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterState, setFilterState] = useState('');
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dragOverStatus, setDragOverStatus] = useState<string | null>(null);
+
+  const filteredLeads = useMemo(() => {
+    return leads.filter((l) => {
+      const matchesSearch =
+        l.business_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        l.business_type.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesState = filterState ? l.state_id === filterState : true;
+      return matchesSearch && matchesState;
+    });
+  }, [leads, searchTerm, filterState]);
+
+  const columns = useMemo(() => {
+    const stagesToUse = stages.length > 0 ? stages : DEFAULTS.map(s => ({
+      id: s.value,
+      clave: s.value,
+      titulo: s.label,
+      descripcion: null,
+      objetivo: null,
+      orden: DEFAULTS.findIndex(ds => ds.value === s.value),
+      limite_pospuestas: 3,
+      intentos_requeridos: 1,
+    }));
+
+    return stagesToUse.map((s) => ({
+      value: s.clave,
+      label: s.titulo,
+      leads: filteredLeads.filter((l) => l.status === s.clave),
+    }));
+  }, [filteredLeads, stages]);
+
+  const handleDrop = async (newStatus: string) => {
+    setDragOverStatus(null);
+    if (!draggedId) return;
+    const lead = leads.find((l) => l.id === draggedId);
+    setDraggedId(null);
+    if (!lead || lead.status === newStatus) return;
+
+    const { error } = await supabase.from('leads').update({ status: newStatus }).eq('id', draggedId);
+    if (error) {
+      console.error('Error al mover lead:', error);
+      return;
+    }
+    onRefresh();
+  };
+
+  return (
+    <div className="space-y-4 animate-fade-in">
+      <div className="flex flex-col sm:flex-row gap-3 bg-white p-3 rounded-xl border border-slate-200">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
+          <input
+            className="w-full pl-9 py-2 text-xs border rounded-lg"
+            placeholder="Buscar por negocio o giro..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+        <select
+          className="text-xs border rounded-lg px-3 bg-white"
+          value={filterState}
+          onChange={(e) => setFilterState(e.target.value)}
+        >
+          <option value="">Todos los Estados (geo)</option>
+          {states.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
+      </div>
+
+      <div className="flex gap-4 overflow-x-auto pb-4">
+        {columns.map((col) => (
+          <div
+            key={col.value}
+            onDragOver={(e) => { e.preventDefault(); setDragOverStatus(col.value); }}
+            onDragLeave={() => setDragOverStatus((s) => (s === col.value ? null : s))}
+            onDrop={(e) => { e.preventDefault(); handleDrop(col.value); }}
+            className={`shrink-0 w-72 rounded-2xl border-t-4 ${COLUMN_ACCENTS[col.value]} bg-slate-50/60 transition-colors ${dragOverStatus === col.value ? 'bg-blue-50 ring-2 ring-blue-200' : ''}`}
+          >
+            <div className="flex items-center justify-between px-3 py-2.5">
+              <h3 className="text-xs font-black uppercase tracking-wider text-slate-700">{col.label}</h3>
+              <span className="text-[10px] font-bold text-slate-400 bg-white px-2 py-0.5 rounded-full border border-slate-200">{col.leads.length}</span>
+            </div>
+
+            <div className="px-2 pb-2 space-y-2 min-h-[80px]">
+              {col.leads.map((lead) => (
+                <div
+                  key={lead.id}
+                  draggable
+                  onDragStart={() => setDraggedId(lead.id)}
+                  onDragEnd={() => setDraggedId(null)}
+                  className={`bg-white border border-slate-200 rounded-xl p-3 shadow-sm hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing space-y-1.5 ${draggedId === lead.id ? 'opacity-40' : ''}`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <Link href={`/dashboard/leads/${lead.id}`} className="font-bold text-slate-900 text-sm hover:text-blue-600 hover:underline leading-tight">
+                      {lead.business_name}
+                    </Link>
+                    <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-black" style={scoreStyle(lead.score_percent)}>
+                      {lead.score_percent.toFixed(0)}%
+                    </span>
+                  </div>
+
+                  <div className="text-[10px] text-slate-500 font-medium">{lead.business_type}</div>
+
+                  {lead.zone_city && (
+                    <div className="flex items-center gap-1 text-[10px] text-slate-500">
+                      <MapPin size={10} className="text-slate-400" /> {lead.zone_city}{lead.state_name ? `, ${lead.state_name}` : ''}
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between pt-1 border-t border-slate-50">
+                    <div className="flex items-center gap-1.5">
+                      {lead.phone && <Phone size={11} className="text-slate-400" />}
+                      {lead.email && <Mail size={11} className="text-slate-400" />}
+                      {lead.website && <Globe size={11} className="text-slate-400" />}
+                    </div>
+                    <span className="text-[8px] font-bold text-slate-300 uppercase">{SOURCE_LABELS[lead.source] || lead.source}</span>
+                  </div>
+                </div>
+              ))}
+
+              {col.leads.length === 0 && (
+                <div className="text-center text-[10px] text-slate-300 py-6 border border-dashed border-slate-200 rounded-xl mx-1">
+                  Sin leads aquí
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

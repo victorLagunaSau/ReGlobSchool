@@ -1,12 +1,11 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { supabase } from '../../../../lib/supabase/client';
-import { PlusCircle, UploadCloud, Search } from 'lucide-react';
-import LeadsTable from './components/LeadsTable';
+import { PlusCircle, Settings, Search } from 'lucide-react';
+import LeadsKanban from './components/LeadsKanban';
 import FormRegistrarLead from './components/FormRegistrarLead';
-import ImportCSV from './components/ImportCSV';
-import SearchBusinesses from './components/SearchBusinesses';
 
 export interface Country {
   id: string;
@@ -29,13 +28,25 @@ export interface ZoneRow {
   city: string;
 }
 
-export const LEAD_STATUSES = [
+// Default statuses fallback if pipeline_stages table not yet created
+export const DEFAULT_LEAD_STATUSES = [
   { value: 'prospecto', label: 'Prospecto' },
   { value: 'llamada', label: 'Llamada' },
   { value: 'negociacion', label: 'Negociación' },
   { value: 'sociedad_comercial', label: 'Sociedad Comercial' },
   { value: 'descartado', label: 'Descartado' },
 ] as const;
+
+export interface PipelineStage {
+  id: string;
+  clave: string;
+  titulo: string;
+  descripcion: string | null;
+  objetivo: string | null;
+  orden: number;
+  limite_pospuestas: number;
+  intentos_requeridos: number;
+}
 
 export interface LeadRow {
   id: string;
@@ -44,13 +55,13 @@ export interface LeadRow {
   phone: string | null;
   email: string | null;
   address: string | null;
+  website: string | null;
   zone_id: string | null;
   country_id: string | null;
   state_id: string | null;
   municipality_code: string | null;
   status: string;
   source: string;
-  assigned_to: string | null;
   tags: string[];
   score_percent: number;
   created_at: string;
@@ -60,13 +71,12 @@ export interface LeadRow {
 
 export default function LeadsPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [isImportOpen, setIsImportOpen] = useState(false);
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
 
   const [countries, setCountries] = useState<Country[]>([]);
   const [states, setStates] = useState<StateRow[]>([]);
   const [zones, setZones] = useState<ZoneRow[]>([]);
   const [leads, setLeads] = useState<LeadRow[]>([]);
+  const [stages, setStages] = useState<PipelineStage[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchAll = useCallback(async () => {
@@ -79,6 +89,17 @@ export default function LeadsPage() {
         .select('*, zones(city), states(name)')
         .order('created_at', { ascending: false }),
     ]);
+
+    // Try to fetch pipeline_stages, but don't block if it fails (table might not exist yet)
+    let stagesRes = { data: null, error: null };
+    try {
+      stagesRes = await supabase
+        .from('pipeline_stages')
+        .select('*')
+        .order('orden', { ascending: true });
+    } catch (err) {
+      console.log('Pipeline stages table not yet created - using defaults');
+    }
 
     if (countriesRes.data) setCountries(countriesRes.data);
     if (statesRes.data) setStates(statesRes.data);
@@ -93,13 +114,13 @@ export default function LeadsPage() {
           phone: l.phone,
           email: l.email,
           address: l.address,
+          website: l.website,
           zone_id: l.zone_id,
           country_id: l.country_id,
           state_id: l.state_id,
           municipality_code: l.municipality_code,
           status: l.status,
           source: l.source,
-          assigned_to: l.assigned_to,
           tags: l.tags || [],
           score_percent: l.score_percent || 0,
           created_at: l.created_at,
@@ -107,6 +128,10 @@ export default function LeadsPage() {
           state_name: l.states?.name || null,
         }))
       );
+    }
+
+    if (stagesRes.data) {
+      setStages(stagesRes.data);
     }
 
     setLoading(false);
@@ -129,13 +154,13 @@ export default function LeadsPage() {
         </div>
 
         <div className="flex gap-2">
-          <button
-            onClick={() => setIsImportOpen(true)}
+          <Link
+            href="/dashboard/leads/config"
             className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-bold hover:bg-slate-50 transition-all shadow-sm"
           >
-            <UploadCloud size={14} className="text-slate-400" />
-            Importar CSV
-          </button>
+            <Settings size={14} className="text-slate-400" />
+            Configuración
+          </Link>
           <button
             onClick={() => setIsCreateOpen(true)}
             className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-bold hover:bg-slate-50 transition-all shadow-sm"
@@ -143,37 +168,21 @@ export default function LeadsPage() {
             <PlusCircle size={14} className="text-slate-400" />
             Nuevo Lead
           </button>
-          <button
-            onClick={() => setIsSearchOpen(true)}
+          <Link
+            href="/dashboard/leads/search"
             className="flex items-center gap-2 px-4 py-2 bg-slate-950 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-all shadow-sm group"
           >
             <Search size={14} className="text-blue-400 group-hover:scale-110 transition-transform" />
             Buscar Negocios
-          </button>
+          </Link>
         </div>
       </div>
 
-      <LeadsTable leads={leads} states={states} onRefresh={fetchAll} />
+      <LeadsKanban leads={leads} states={states} stages={stages} onRefresh={fetchAll} />
 
       <FormRegistrarLead
         isOpen={isCreateOpen}
         onClose={() => setIsCreateOpen(false)}
-        countries={countries}
-        states={states}
-        zones={zones}
-        onCreated={fetchAll}
-      />
-
-      <ImportCSV
-        isOpen={isImportOpen}
-        onClose={() => setIsImportOpen(false)}
-        zones={zones}
-        onImported={fetchAll}
-      />
-
-      <SearchBusinesses
-        isOpen={isSearchOpen}
-        onClose={() => setIsSearchOpen(false)}
         countries={countries}
         states={states}
         zones={zones}
