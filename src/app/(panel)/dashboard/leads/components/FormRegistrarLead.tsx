@@ -39,9 +39,26 @@ export default function FormRegistrarLead({ isOpen, onClose, countries, states, 
   const [selectedState, setSelectedState] = useState('');
   const [selectedZone, setSelectedZone] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [firstStageClave, setFirstStageClave] = useState('prospecto');
 
   useEffect(() => {
-    if (!isOpen || !initialData) return;
+    if (!isOpen) return;
+
+    // Load first pipeline stage (orden=1)
+    const loadFirstStage = async () => {
+      const { data, error } = await supabase
+        .from('pipeline_stages')
+        .select('clave')
+        .eq('orden', 1)
+        .single();
+
+      if (data) setFirstStageClave(data.clave);
+      else setFirstStageClave('prospecto'); // fallback
+    };
+
+    loadFirstStage();
+
+    if (!initialData) return;
     setBusinessName(initialData.business_name || '');
     setBusinessType(initialData.business_type || '');
     setPhone(initialData.phone || '');
@@ -90,6 +107,7 @@ export default function FormRegistrarLead({ isOpen, onClose, countries, states, 
           country_id: selectedCountry || null,
           state_id: selectedState || null,
           zone_id: selectedZone || null,
+          status: firstStageClave,
           source,
         })
         .select('id')

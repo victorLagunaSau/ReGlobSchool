@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, GraduationCap, MapPin, LogOut, X, Map, Users, ListChecks } from 'lucide-react';
+import { LayoutDashboard, GraduationCap, MapPin, LogOut, X, Map, Users, ListChecks, Search } from 'lucide-react';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -21,6 +21,7 @@ export default function Sidebar({ isOpen, setIsOpen, onLogout }: SidebarProps) {
     { name: 'Zonas', href: '/dashboard/zonas', icon: MapPin },
     { name: 'Mapas', href: '/dashboard/maps', icon: Map },
     { name: 'Leads', href: '/dashboard/leads', icon: Users },
+    { name: 'Buscar Negocios', href: '/dashboard/leads/search', icon: Search },
     { name: 'Mis Tareas', href: '/dashboard/tasks', icon: ListChecks },
   ];
 

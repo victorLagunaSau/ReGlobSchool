@@ -1,12 +1,13 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import Link from 'next/link';
 import { supabase } from '../../../../../lib/supabase/client';
-import { ArrowLeft, Search, MapPin, Phone, Globe, Mail, PlusCircle, Loader2, Map } from 'lucide-react';
+import { Search, MapPin, Phone, Globe, Mail, PlusCircle, Loader2, Map } from 'lucide-react';
 import FormRegistrarLead, { type LeadInitialData } from '../components/FormRegistrarLead';
 import MapZoneSelector from '../components/MapZoneSelector';
 import ZoneSelector from '../components/ZoneSelector';
+import ConfirmLocationModal from '../components/ConfirmLocationModal';
+import { matchAddressToLocation } from '../../../../../lib/leads/address-matcher';
 import type { Country, StateRow } from '../page';
 
 interface ZoneWithStatus {
@@ -28,6 +29,7 @@ interface SearchResult {
   types: string[];
   emailStatus: 'idle' | 'loading' | 'found' | 'not_found';
   email: string | null;
+  isApt: boolean; // Tiene al menos teléfono o email
 }
 
 // Convención usada en todo el panel (MapView/StateMapView/dashboard/maps):
@@ -48,12 +50,18 @@ export default function LeadsSearchPage() {
   const [selectedState, setSelectedState] = useState('');
   const [selectedZoneIds, setSelectedZoneIds] = useState<Set<string>>(new Set());
   const [zoneSearch, setZoneSearch] = useState('');
+  const [notification, setNotification] = useState<{ type: 'error' | 'success'; message: string } | null>(null);
 
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [results, setResults] = useState<SearchResult[] | null>(null);
   const [convertingResultId, setConvertingResultId] = useState<string | null>(null);
+  const [convertedIds, setConvertedIds] = useState<Set<string>>(new Set());
   const [isMapSelectorOpen, setIsMapSelectorOpen] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
+  const [pendingInitialData, setPendingInitialData] = useState<LeadInitialData | null>(null);
+  const [isConfirmLocationOpen, setIsConfirmLocationOpen] = useState(false);
+  const [confirmLocationData, setConfirmLocationData] = useState<{ result: SearchResult; match: any } | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -66,6 +74,7 @@ export default function LeadsSearchPage() {
       if (countriesRes.data) setCountries(countriesRes.data);
       if (statesRes.data) setStates(statesRes.data);
       if (zonesRes.data) {
+        console.log('Zonas cargadas:', zonesRes.data.length);
         setZones(
           zonesRes.data.map((z) => ({
             id: z.id,
@@ -75,6 +84,8 @@ export default function LeadsSearchPage() {
             isLibre: isZoneLibre(z.assigned_to),
           }))
         );
+      } else {
+        console.log('Error al cargar zonas:', zonesRes.error);
       }
       setLoading(false);
     })();
@@ -108,12 +119,16 @@ export default function LeadsSearchPage() {
       .sort((a, b) => a.occupancyPercent - b.occupancyPercent);
   }, [states, selectedCountry, stateOccupancy]);
 
-  const libreZonesForState = useMemo(() => {
+  const allZonesForState = useMemo(() => {
     const term = zoneSearch.trim().toLowerCase();
-    return zones
-      .filter((z) => z.state_id === selectedState && z.isLibre)
-      .filter((z) => !term || z.city.toLowerCase().includes(term))
-      .sort((a, b) => a.city.localeCompare(b.city));
+    const stateZones = zones.filter((z) => z.state_id === selectedState);
+    const filtered = stateZones.filter((z) => !term || z.city.toLowerCase().includes(term));
+
+    // Separar libres y ocupadas
+    const libres = filtered.filter((z) => z.isLibre).sort((a, b) => a.city.localeCompare(b.city));
+    const ocupadas = filtered.filter((z) => !z.isLibre).sort((a, b) => a.city.localeCompare(b.city));
+
+    return { libres, ocupadas };
   }, [zones, selectedState, zoneSearch]);
 
   const stateRow = states.find((s) => s.id === selectedState);
@@ -133,13 +148,41 @@ export default function LeadsSearchPage() {
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!query.trim() || selectedZoneIds.size === 0 || !stateRow) {
-      return alert('Escribe un giro, selecciona un estado y al menos una zona libre para buscar.');
+    setNotification(null);
+
+    // Validar búsqueda
+    if (!query.trim()) {
+      setNotification({ type: 'error', message: 'Por favor ingresa un giro o rubro de búsqueda' });
+      return;
+    }
+
+    if (query.trim().length === 0 || /^\s+$/.test(query)) {
+      setNotification({ type: 'error', message: 'El campo de búsqueda no puede contener solo espacios' });
+      return;
+    }
+
+    // Validar país
+    if (!selectedCountry) {
+      setNotification({ type: 'error', message: 'Por favor selecciona un país' });
+      return;
+    }
+
+    // Validar estado
+    if (!selectedState) {
+      setNotification({ type: 'error', message: 'Por favor selecciona un estado' });
+      return;
+    }
+
+    // Validar zonas
+    if (selectedZoneIds.size === 0) {
+      setNotification({ type: 'error', message: 'Por favor selecciona al menos una zona' });
+      return;
     }
 
     setIsSearching(true);
     setSearchError(null);
     setResults(null);
+    setHasSearched(true);
 
     try {
       const cities = Array.from(new Set(Array.from(selectedZoneIds).map((id) => zones.find((z) => z.id === id)?.city).filter(Boolean))) as string[];
@@ -147,19 +190,21 @@ export default function LeadsSearchPage() {
       const res = await fetch('/api/leads/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: query.trim(), cities, stateName: stateRow.name }),
+        body: JSON.stringify({ query: query.trim(), cities, stateName: stateRow?.name }),
       });
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al buscar negocios.');
 
-      setResults(
-        (data.results || []).map((r: Omit<SearchResult, 'emailStatus' | 'email'>) => ({
-          ...r,
-          emailStatus: 'idle' as const,
-          email: null,
-        }))
-      );
+      // Procesar resultados: agregar emailStatus e email iniciales
+      const processedResults = (data.results || []).map((r: Omit<SearchResult, 'emailStatus' | 'email' | 'isApt'>) => ({
+        ...r,
+        emailStatus: 'idle' as const,
+        email: null,
+        isApt: !!(r.phone || r.website), // Apto si tiene teléfono o website
+      }));
+
+      setResults(processedResults);
     } catch (error) {
       console.error('Error al buscar negocios:', error);
       setSearchError(error instanceof Error ? error.message : 'Error al buscar negocios.');
@@ -190,224 +235,375 @@ export default function LeadsSearchPage() {
   const convertingResult = results?.find((r) => r.id === convertingResultId) || null;
 
   const handleConvertClick = (result: SearchResult) => {
+    // Hacer matching de ubicación basado en la dirección
+    const match = matchAddressToLocation(
+      result.address || '',
+      states,
+      zones.map((z) => ({ id: z.id, city: z.city, state_id: z.state_id }))
+    );
+
+    // Si encontró exactamente estado Y zona, rellenar directamente
+    if (match.stateId && match.zoneId && match.isExactMatch) {
+      const initialData: LeadInitialData = {
+        business_name: result.name,
+        business_type: query.trim(),
+        phone: result.phone || '',
+        email: result.email || '',
+        address: result.address || '',
+        website: result.website || '',
+        country_id: selectedCountry,
+        state_id: match.stateId,
+        zone_id: match.zoneId,
+      };
+      setPendingInitialData(initialData);
+      setConvertingResultId(result.id);
+      if (result.website && result.emailStatus === 'idle') {
+        fetchEmailForResult(result);
+      }
+    } else {
+      // Mostrar modal de confirmación si falta estado o zona
+      setConfirmLocationData({ result, match });
+      setIsConfirmLocationOpen(true);
+    }
+  };
+
+  const handleConfirmLocation = (stateId: string, zoneId: string) => {
+    if (!confirmLocationData) return;
+
+    const { result } = confirmLocationData;
+    const initialData: LeadInitialData = {
+      business_name: result.name,
+      business_type: query.trim(),
+      phone: result.phone || '',
+      email: result.email || '',
+      address: result.address || '',
+      website: result.website || '',
+      country_id: selectedCountry,
+      state_id: stateId,
+      zone_id: zoneId || undefined,
+    };
+
+    setPendingInitialData(initialData);
     setConvertingResultId(result.id);
+    setIsConfirmLocationOpen(false);
+    setConfirmLocationData(null);
+
     if (result.website && result.emailStatus === 'idle') {
       fetchEmailForResult(result);
     }
   };
 
-  const initialDataForResult = (result: SearchResult): LeadInitialData => ({
-    business_name: result.name,
-    business_type: query.trim(),
-    phone: result.phone || '',
-    email: result.email || '',
-    address: result.address || '',
-    website: result.website || '',
-    country_id: selectedCountry,
-    state_id: selectedState,
-    zone_id: undefined,
-  });
+  const initialDataForResult = (result: SearchResult): LeadInitialData => {
+    // Si hay datos precargados, usarlos (fueron confirmados/matched)
+    if (pendingInitialData) {
+      return pendingInitialData;
+    }
+    // Si no, devolver datos básicos sin estado/zona
+    return {
+      business_name: result.name,
+      business_type: query.trim(),
+      phone: result.phone || '',
+      email: result.email || '',
+      address: result.address || '',
+      website: result.website || '',
+      country_id: selectedCountry,
+      state_id: undefined,
+      zone_id: undefined,
+    };
+  };
 
   if (loading) {
     return <div className="p-8 text-center text-slate-500 font-medium">Cargando...</div>;
   }
 
+  const countryName = countries.find((c) => c.id === selectedCountry)?.name || '';
+  const stateName = states.find((s) => s.id === selectedState)?.name || '';
+  const selectedCities = Array.from(selectedZoneIds).map((id) => zones.find((z) => z.id === id)?.city).filter(Boolean);
+
   return (
-    <div className="space-y-6">
-      <Link href="/dashboard/leads" className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-800 w-fit">
-        <ArrowLeft size={14} /> Volver al listado de Leads
-      </Link>
-
-      <div className="max-w-5xl mx-auto w-full space-y-4">
-        <div className="text-center space-y-1">
-          <h1 className="text-2xl font-black text-slate-950 tracking-tight">Buscar Negocios</h1>
-          <p className="text-xs text-slate-500">Búsqueda en vivo vía Google Maps. Nada se guarda hasta que conviertas un resultado en Lead.</p>
+    <div className="min-h-screen bg-white flex flex-col">
+      {/* Notificación Popup */}
+      {notification && (
+        <div className={`fixed top-4 right-4 max-w-md rounded-lg shadow-lg p-4 z-50 animate-fade-in ${
+          notification.type === 'error'
+            ? 'bg-red-50 border border-red-200'
+            : 'bg-green-50 border border-green-200'
+        }`}>
+          <div className="flex items-start gap-3">
+            <div className={`text-lg ${notification.type === 'error' ? 'text-red-600' : 'text-green-600'}`}>
+              {notification.type === 'error' ? '⚠️' : '✓'}
+            </div>
+            <div className="flex-1">
+              <p className={`text-sm font-medium ${notification.type === 'error' ? 'text-red-800' : 'text-green-800'}`}>
+                {notification.message}
+              </p>
+            </div>
+            <button
+              onClick={() => setNotification(null)}
+              className={`text-lg font-bold ${notification.type === 'error' ? 'text-red-400 hover:text-red-600' : 'text-green-400 hover:text-green-600'}`}
+            >
+              ✕
+            </button>
+          </div>
         </div>
+      )}
 
-        <form onSubmit={handleSearch} className="space-y-4">
-          {/* Input de búsqueda con icono de mapa */}
-          <div className="relative flex gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+      {/* Formulario centrado (antes de buscar) o compacto (después de buscar) */}
+      {!hasSearched ? (
+        // VISTA INICIAL: Centrada, grande
+        <div className="flex-1 flex flex-col items-center justify-start pt-16 px-4">
+          {/* Título y descripción */}
+          <div className="text-center mb-12 max-w-2xl">
+            <h1 className="text-4xl font-light text-slate-950 mb-2">Buscar Negocios</h1>
+            <p className="text-sm text-slate-600">Búsqueda en vivo vía Google Maps • Selecciona país, estado y zonas</p>
+          </div>
+
+          {/* Formulario centrado */}
+          <form onSubmit={handleSearch} className="w-full max-w-3xl space-y-3">
+            {/* Input de búsqueda */}
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
               <input
                 type="text"
                 placeholder="Ej. Librerías, papelerías, escuelas..."
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                className="w-full pl-11 pr-12 py-3 text-sm border border-slate-200 rounded-lg bg-white shadow-sm focus:outline-blue-600 focus:shadow-md transition-shadow"
+                className="w-full pl-12 pr-12 py-3 text-base border border-slate-300 rounded-full bg-white shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-0 focus:border-transparent transition-all"
               />
               <button
                 type="button"
                 onClick={() => setIsMapSelectorOpen(true)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 hover:bg-slate-100 rounded-lg transition"
+                className="absolute right-4 top-1/2 -translate-y-1/2 p-1.5 hover:bg-slate-100 rounded-lg transition"
                 title="Seleccionar zonas desde mapa"
               >
-                <Map size={18} className="text-slate-400 hover:text-blue-600" />
+                <Map size={18} className="text-slate-500 hover:text-blue-600" />
               </button>
             </div>
-            <button
-              type="submit"
-              disabled={isSearching}
-              className="px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition"
-            >
-              {isSearching ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
-            </button>
-          </div>
 
-          {/* Filtros: País, Estado, Zonas en una fila */}
-          <div className="grid grid-cols-3 gap-3">
-            {/* País */}
-            <div>
-              <label className="block text-[10px] font-bold text-slate-500 mb-1.5">País *</label>
-              <select
-                value={selectedCountry}
-                onChange={(e) => { setSelectedCountry(e.target.value); setSelectedState(''); setSelectedZoneIds(new Set()); }}
-                className="w-full border border-slate-200 rounded-lg p-2.5 text-xs bg-white focus:outline-blue-600"
-              >
-                {countries.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            </div>
+            {/* Filtros: País, Estado, Zonas en una fila */}
+            <div className="flex gap-6 items-center justify-center flex-wrap">
+              {/* País */}
+              <div className="flex items-center gap-2">
+                <label className="text-xs font-semibold text-slate-600 min-w-fit">País:</label>
+                <select
+                  value={selectedCountry}
+                  onChange={(e) => { setSelectedCountry(e.target.value); setSelectedState(''); setSelectedZoneIds(new Set()); }}
+                  className="appearance-none bg-transparent text-sm font-medium text-slate-900 border-b-2 border-slate-300 hover:border-slate-400 focus:border-blue-600 focus:outline-none pb-1 cursor-pointer pr-4 min-w-[100px]"
+                >
+                  {countries.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
 
-            {/* Estado */}
-            <div>
-              <label className="block text-[10px] font-bold text-slate-500 mb-1.5">Estado *</label>
-              <select
-                value={selectedState}
-                onChange={(e) => { setSelectedState(e.target.value); setSelectedZoneIds(new Set()); setZoneSearch(''); }}
-                className="w-full border border-slate-200 rounded-lg p-2.5 text-xs bg-white focus:outline-blue-600"
-              >
-                <option value="">Selecciona un estado...</option>
-                {availableStates.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
-            </div>
+              {/* Estado */}
+              <div className="flex items-center gap-2">
+                <label className="text-xs font-semibold text-slate-600 min-w-fit">Estado:</label>
+                <select
+                  value={selectedState}
+                  onChange={(e) => { setSelectedState(e.target.value); setSelectedZoneIds(new Set()); setZoneSearch(''); }}
+                  className="appearance-none bg-transparent text-sm font-medium text-slate-900 border-b-2 border-slate-300 hover:border-slate-400 focus:border-blue-600 focus:outline-none pb-1 cursor-pointer pr-4 min-w-[130px]"
+                >
+                  <option value="">Selecciona...</option>
+                  {availableStates.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name} {s.occupancyPercent}%</option>
+                  ))}
+                </select>
+              </div>
 
-            {/* Zonas */}
-            <div>
-              <label className="block text-[10px] font-bold text-slate-500 mb-1.5">Zonas</label>
-              <ZoneSelector
-                zones={libreZonesForState}
-                selectedZoneIds={selectedZoneIds}
-                onSelectionChange={setSelectedZoneIds}
-                disabled={!selectedState}
-              />
-            </div>
-          </div>
-
-          {/* Resumen de selecciones en azul */}
-          {(selectedCountry || selectedState || selectedZoneIds.size > 0) && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-              <div className="flex flex-wrap gap-1 items-center text-xs">
-                <span className="font-semibold text-blue-900">
-                  {countries.find(c => c.id === selectedCountry)?.name}
-                </span>
-                {selectedState && (
-                  <>
-                    <span className="text-blue-700">/</span>
-                    <span className="font-semibold text-blue-900">
-                      {states.find(s => s.id === selectedState)?.name}
-                    </span>
-                  </>
-                )}
-                {selectedZoneIds.size > 0 && (
-                  <>
-                    <span className="text-blue-700">/</span>
-                    <div className="flex flex-wrap gap-1">
-                      {libreZonesForState
-                        .filter(z => selectedZoneIds.has(z.id))
-                        .sort((a, b) => a.city.localeCompare(b.city))
-                        .map((z) => (
-                          <span key={z.id} className="text-blue-900">
-                            {z.city}{selectedZoneIds.has(z.id) && libreZonesForState.filter(zz => selectedZoneIds.has(zz.id)).length > 1 && selectedZoneIds.has(z.id) && libreZonesForState.filter(zz => selectedZoneIds.has(zz.id)).indexOf(z) < libreZonesForState.filter(zz => selectedZoneIds.has(zz.id)).length - 1 ? ',' : ''}
-                          </span>
-                        ))}
-                    </div>
-                  </>
-                )}
+              {/* Zonas */}
+              <div className="flex items-center gap-2">
+                <label className="text-xs font-semibold text-slate-600 min-w-fit">Zonas:</label>
+                <ZoneSelector
+                  libres={allZonesForState.libres}
+                  ocupadas={allZonesForState.ocupadas}
+                  selectedZoneIds={selectedZoneIds}
+                  onSelectionChange={setSelectedZoneIds}
+                  disabled={!selectedState}
+                />
               </div>
             </div>
-          )}
 
-          <div className="flex justify-center">
-            <button type="submit" disabled={isSearching} className="px-8 py-2.5 bg-blue-600 text-white font-semibold rounded-lg text-sm hover:bg-blue-700 flex items-center gap-2 shadow-sm disabled:opacity-50">
-              {isSearching ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
-              Buscar Negocios
-            </button>
-          </div>
-        </form>
-
-        {searchError && (
-          <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-lg text-[11px] text-rose-700 text-center">{searchError}</div>
-        )}
-      </div>
-
-      {/* RESULTADOS: mucho espacio, tipo grid de tarjetas */}
-      {results && (
-        <div className="space-y-4 pt-6 border-t border-slate-100">
-          <p className="text-xs font-bold text-slate-500 text-center">{results.length} resultados encontrados</p>
-
-          {results.length === 0 ? (
-            <div className="p-10 text-center text-sm text-slate-400 border border-dashed border-slate-200 rounded-2xl max-w-md mx-auto">
-              Sin resultados para esta búsqueda.
+            {/* Botón de búsqueda */}
+            <div className="flex justify-center pt-4">
+              <button type="submit" disabled={isSearching} className="px-8 py-2.5 bg-blue-600 text-white font-medium rounded-full text-sm hover:bg-blue-700 disabled:opacity-50 transition-colors">
+                {isSearching ? <Loader2 size={16} className="animate-spin inline mr-2" /> : ''}
+                Buscar
+              </button>
             </div>
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 max-w-5xl mx-auto">
-              {results.map((result) => (
-                <div key={result.id} className="border border-slate-200 rounded-2xl p-5 bg-white shadow-sm hover:shadow-md transition-shadow space-y-2.5">
-                  <div className="flex items-start justify-between gap-3">
-                    <h3 className="font-bold text-slate-900 text-base">{result.name}</h3>
-                    <button
-                      onClick={() => handleConvertClick(result)}
-                      className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-slate-950 text-white rounded-lg text-[11px] font-bold hover:bg-slate-800"
-                    >
-                      <PlusCircle size={12} className="text-blue-400" /> Convertir a Lead
-                    </button>
-                  </div>
+          </form>
 
-                  {result.address && (
-                    <div className="flex items-start gap-1.5 text-xs text-slate-600">
-                      <MapPin size={13} className="text-slate-400 shrink-0 mt-0.5" /> {result.address}
-                    </div>
-                  )}
-                  {result.phone && (
-                    <div className="flex items-center gap-1.5 text-xs text-slate-600">
-                      <Phone size={13} className="text-slate-400 shrink-0" /> {result.phone}
-                    </div>
-                  )}
-                  {result.website && (
-                    <div className="flex items-center gap-1.5 text-xs">
-                      <Globe size={13} className="text-slate-400 shrink-0" />
-                      <a href={result.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline truncate">
-                        {result.website}
-                      </a>
-                    </div>
-                  )}
-
-                  <div className="flex items-center gap-1.5 text-xs pt-1 border-t border-slate-50">
-                    <Mail size={13} className="text-slate-400 shrink-0" />
-                    {result.emailStatus === 'loading' ? (
-                      <span className="text-slate-400 flex items-center gap-1"><Loader2 size={11} className="animate-spin" /> Buscando correo...</span>
-                    ) : result.emailStatus === 'found' && result.email ? (
-                      <span className="text-slate-700 font-semibold">{result.email}</span>
-                    ) : result.emailStatus === 'not_found' ? (
-                      <span className="text-slate-400">Sin correo encontrado</span>
-                    ) : result.website ? (
-                      <button onClick={() => fetchEmailForResult(result)} className="text-blue-600 hover:underline font-semibold">Buscar correo</button>
-                    ) : (
-                      <span className="text-slate-300">Sin sitio web</span>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
+          {searchError && (
+            <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-lg text-[11px] text-rose-700 text-center mt-4">{searchError}</div>
           )}
         </div>
+      ) : (
+        // VISTA POST-BÚSQUEDA: Compacta arriba, resultados debajo
+        <>
+          {/* Barra de búsqueda compacta */}
+          <div className="bg-white px-4 py-2 sticky top-16 z-10">
+            <form onSubmit={handleSearch} className="flex gap-3 items-center">
+              {/* Input pequeño */}
+              <div className="relative flex-1 max-w-md">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                <input
+                  type="text"
+                  placeholder="Ej. Librerías, papelerías..."
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  className="w-full pl-9 pr-3 py-1.5 text-sm border border-slate-200 rounded-full bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all"
+                />
+              </div>
+
+              {/* Filtros compactos */}
+              <div className="flex gap-3 items-center">
+                <select
+                  value={selectedCountry}
+                  onChange={(e) => { setSelectedCountry(e.target.value); setSelectedState(''); setSelectedZoneIds(new Set()); }}
+                  className="appearance-none bg-transparent text-xs font-medium text-slate-900 border-b-2 border-slate-300 hover:border-slate-400 focus:border-blue-600 focus:outline-none pb-0.5 cursor-pointer pr-2 min-w-fit"
+                >
+                  {countries.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+
+                <select
+                  value={selectedState}
+                  onChange={(e) => { setSelectedState(e.target.value); setSelectedZoneIds(new Set()); setZoneSearch(''); }}
+                  className="appearance-none bg-transparent text-xs font-medium text-slate-900 border-b-2 border-slate-300 hover:border-slate-400 focus:border-blue-600 focus:outline-none pb-0.5 cursor-pointer pr-2 min-w-fit"
+                >
+                  <option value="">Estado</option>
+                  {availableStates.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name} {s.occupancyPercent}%</option>
+                  ))}
+                </select>
+
+                <ZoneSelector
+                  libres={allZonesForState.libres}
+                  ocupadas={allZonesForState.ocupadas}
+                  selectedZoneIds={selectedZoneIds}
+                  onSelectionChange={setSelectedZoneIds}
+                  disabled={!selectedState}
+                />
+              </div>
+
+              {/* Botón buscar pequeño */}
+              <button type="submit" disabled={isSearching} className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium text-xs hover:bg-blue-700 disabled:opacity-50 transition-colors">
+                {isSearching ? <Loader2 size={14} className="animate-spin inline" /> : 'Buscar'}
+              </button>
+            </form>
+          </div>
+
+          {/* Breadcrumb/Ruta */}
+          <div className="bg-white px-4 py-1">
+            <p className="text-xs text-blue-600 font-medium">
+              {countryName} {stateName && `/ ${stateName}`} {selectedCities.length > 0 && `/ ${selectedCities.join(', ')}`}
+            </p>
+          </div>
+
+          {/* Resultados */}
+          {results && (
+            <div className="flex-1 px-0 py-0">
+              <p className="text-xs font-bold text-slate-500 mb-0 px-4 py-2 border-b border-slate-100">{results.filter((r) => !convertedIds.has(r.id)).length} resultados encontrados</p>
+
+              {results.length === 0 ? (
+                <div className="p-10 text-center text-sm text-slate-400 border border-dashed border-slate-200">
+                  Sin resultados para esta búsqueda.
+                </div>
+              ) : (
+                <div className="space-y-0">
+                  {results
+                    .filter((r) => !convertedIds.has(r.id))
+                    .sort((a, b) => {
+                      // Calcular isApt para ambos resultados
+                      const aIsApt = !!(a.phone || a.email || a.website);
+                      const bIsApt = !!(b.phone || b.email || b.website);
+                      // Aptos primero, no aptos al final
+                      if (aIsApt === bIsApt) return 0;
+                      return aIsApt ? -1 : 1;
+                    })
+                    .map((result) => {
+                      // Calcular isApt dinámicamente basado en datos actuales
+                      const isApt = !!(result.phone || result.email || result.website);
+                      return (
+                    <div key={result.id} className={`border-b border-slate-100 rounded-none p-3 transition-all ${!isApt ? 'bg-slate-50' : 'bg-white hover:bg-slate-50'}`}>
+                      {/* Título + dirección + badge */}
+                      <div className="flex items-start gap-2 mb-1">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-bold text-slate-950 text-base leading-tight">{result.name}</h3>
+                            {!isApt && (
+                              <span className="inline-block px-2 py-0.5 bg-red-100 text-red-700 text-[10px] font-bold rounded-full">No apto</span>
+                            )}
+                          </div>
+                          {result.address && (
+                            <p className="text-xs text-slate-600 mt-0.5">{result.address}</p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Contacto: Website, Teléfono, Email en una línea */}
+                      <div className="flex items-center gap-3 text-sm mb-2 flex-wrap">
+                        {result.website && (
+                          <a href={result.website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-blue-600 hover:text-blue-800 italic font-medium">
+                            <Globe size={14} />
+                            {result.website.replace(/^https?:\/\/(www\.)?/, '')}
+                          </a>
+                        )}
+                        {result.phone && (
+                          <a href={`tel:${result.phone}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-blue-600 hover:text-blue-800 italic font-medium">
+                            <Phone size={14} />
+                            {result.phone}
+                          </a>
+                        )}
+                        {result.emailStatus === 'found' && result.email && (
+                          <a href={`mailto:${result.email}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-blue-600 hover:text-blue-800 italic font-medium truncate">
+                            <Mail size={14} />
+                            {result.email}
+                          </a>
+                        )}
+                      </div>
+
+                      {/* Botón Convertir */}
+                      <button
+                        onClick={() => {
+                          if (!isApt) {
+                            setNotification({
+                              type: 'error',
+                              message: 'Este resultado no tiene teléfono ni correo. Agrega al menos uno para convertirlo a LEAD.',
+                            });
+                            return;
+                          }
+                          handleConvertClick(result);
+                          setConvertedIds((prev) => new Set([...prev, result.id]));
+                        }}
+                        disabled={!isApt}
+                        className={`py-1 px-4 rounded-lg font-medium text-xs transition-colors max-w-sm ${
+                          isApt
+                            ? 'bg-blue-600 text-white hover:bg-blue-700'
+                            : 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                        }`}
+                      >
+                        {isApt ? 'Convertir a LEAD' : 'Sin contacto'}
+                      </button>
+                    </div>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {searchError && (
+            <div className="px-6 py-4 bg-rose-50 border-t border-rose-200">
+              <p className="text-xs text-rose-700 text-center">{searchError}</p>
+            </div>
+          )}
+        </>
       )}
 
       <FormRegistrarLead
         isOpen={convertingResultId !== null}
-        onClose={() => setConvertingResultId(null)}
+        onClose={() => {
+          setConvertingResultId(null);
+          setPendingInitialData(null);
+        }}
         countries={countries}
         states={states}
         zones={zones.map((z) => ({ id: z.id, country_id: z.country_id, state_id: z.state_id, cve_municipio: 0, cvegeo: '', city: z.city }))}
@@ -424,6 +620,24 @@ export default function LeadsSearchPage() {
         zones={zones}
         onZonesSelected={handleMapZonesSelected}
       />
+
+      {confirmLocationData && (
+        <ConfirmLocationModal
+          isOpen={isConfirmLocationOpen}
+          onConfirm={handleConfirmLocation}
+          onCancel={() => {
+            setIsConfirmLocationOpen(false);
+            setConfirmLocationData(null);
+          }}
+          address={confirmLocationData.result.address || ''}
+          foundStateName={confirmLocationData.match.stateName}
+          foundZoneName={confirmLocationData.match.zoneName}
+          countries={countries}
+          states={states}
+          zones={zones.map((z) => ({ id: z.id, city: z.city, state_id: z.state_id }))}
+          defaultCountryId={selectedCountry}
+        />
+      )}
     </div>
   );
 }

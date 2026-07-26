@@ -89,16 +89,23 @@ export async function POST(request: Request) {
     }
   }
 
-  const results = merged.map((place) => ({
-    id: place.id || crypto.randomUUID(),
-    name: place.displayName?.text || 'Sin nombre',
-    address: place.formattedAddress || null,
-    phone: place.internationalPhoneNumber || null,
-    website: place.websiteUri || null,
-    lat: place.location?.latitude ?? null,
-    lng: place.location?.longitude ?? null,
-    types: place.types || [],
-  }));
+  const results = merged
+    .map((place) => ({
+      id: place.id || crypto.randomUUID(),
+      name: place.displayName?.text || 'Sin nombre',
+      address: place.formattedAddress || null,
+      phone: place.internationalPhoneNumber || null,
+      website: place.websiteUri || null,
+      lat: place.location?.latitude ?? null,
+      lng: place.location?.longitude ?? null,
+      types: place.types || [],
+    }))
+    // Priorizar resultados con website
+    .sort((a, b) => {
+      if (a.website && !b.website) return -1;
+      if (!a.website && b.website) return 1;
+      return 0;
+    });
 
   return NextResponse.json({ results });
 }
