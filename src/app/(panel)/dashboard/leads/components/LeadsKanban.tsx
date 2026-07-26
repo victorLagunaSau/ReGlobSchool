@@ -3,8 +3,9 @@
 import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { supabase } from '../../../../../lib/supabase/client';
-import { Search, MapPin, Phone, Mail, Globe } from 'lucide-react';
+import { Search, MapPin, Phone, Mail, Globe, Maximize2 } from 'lucide-react';
 import { scoreStyle } from '../../../../../lib/lead-score';
+import LeadWorkModal from './LeadWorkModal';
 import type { LeadRow, StateRow, PipelineStage, DEFAULT_LEAD_STATUSES } from '../page';
 import { DEFAULT_LEAD_STATUSES as DEFAULTS } from '../page';
 
@@ -35,6 +36,8 @@ export default function LeadsKanban({ leads, states, stages, onRefresh }: LeadsK
   const [filterState, setFilterState] = useState('');
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dragOverStatus, setDragOverStatus] = useState<string | null>(null);
+  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+  const [isLeadModalOpen, setIsLeadModalOpen] = useState(false);
 
   const filteredLeads = useMemo(() => {
     return leads.filter((l) => {
@@ -126,9 +129,21 @@ export default function LeadsKanban({ leads, states, stages, onRefresh }: LeadsK
                   className={`bg-white border border-slate-200 rounded-xl p-3 shadow-sm hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing space-y-1.5 ${draggedId === lead.id ? 'opacity-40' : ''}`}
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <Link href={`/dashboard/leads/${lead.id}`} className="font-bold text-slate-900 text-sm hover:text-blue-600 hover:underline leading-tight">
-                      {lead.business_name}
-                    </Link>
+                    <div className="flex-1 flex items-start gap-1.5">
+                      <Link href={`/dashboard/leads/${lead.id}`} className="font-bold text-slate-900 text-sm hover:text-blue-600 hover:underline leading-tight">
+                        {lead.business_name}
+                      </Link>
+                      <button
+                        onClick={() => {
+                          setSelectedLeadId(lead.id);
+                          setIsLeadModalOpen(true);
+                        }}
+                        className="p-0.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded transition-all flex-shrink-0 mt-0.5"
+                        title="Ver detalles"
+                      >
+                        <Maximize2 size={14} />
+                      </button>
+                    </div>
                     <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-black" style={scoreStyle(lead.score_percent)}>
                       {lead.score_percent.toFixed(0)}%
                     </span>
@@ -162,6 +177,16 @@ export default function LeadsKanban({ leads, states, stages, onRefresh }: LeadsK
           </div>
         ))}
       </div>
+
+      <LeadWorkModal
+        isOpen={isLeadModalOpen}
+        leadId={selectedLeadId}
+        onClose={() => {
+          setIsLeadModalOpen(false);
+          setSelectedLeadId(null);
+        }}
+        onTaskResolved={onRefresh}
+      />
     </div>
   );
 }

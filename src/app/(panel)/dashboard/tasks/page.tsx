@@ -3,8 +3,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { supabase } from '../../../../lib/supabase/client';
-import { Phone, Mail, Users, Video, Clock, CheckCircle2, Loader2 } from 'lucide-react';
+import { Phone, Mail, Users, Video, Clock, CheckCircle2, Loader2, Maximize2 } from 'lucide-react';
 import TaskActions from '../leads/components/TaskActions';
+import LeadWorkModal from '../leads/components/LeadWorkModal';
 import type { ResolvableTask } from '../../../../lib/task-automation';
 
 interface TaskWithLead {
@@ -35,6 +36,8 @@ export default function MisTareasPage() {
   const [tasks, setTasks] = useState<TaskWithLead[]>([]);
   const [loading, setLoading] = useState(true);
   const [markingDoneId, setMarkingDoneId] = useState<string | null>(null);
+  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+  const [isLeadModalOpen, setIsLeadModalOpen] = useState(false);
 
   const fetchTasks = useCallback(async () => {
     const { data, error } = await supabase
@@ -90,10 +93,22 @@ export default function MisTareasPage() {
     return (
       <div key={task.id} className="bg-white border border-slate-200 rounded-xl p-4 space-y-2.5">
         <div className="flex items-start justify-between gap-2">
-          <div>
-            <Link href={`/dashboard/leads/${task.lead_id}`} className="font-bold text-slate-900 text-sm hover:text-blue-600 hover:underline">
-              {task.lead_business_name}
-            </Link>
+          <div className="flex-1">
+            <div className="flex items-center gap-2">
+              <Link href={`/dashboard/leads/${task.lead_id}`} className="font-bold text-slate-900 text-sm hover:text-blue-600 hover:underline">
+                {task.lead_business_name}
+              </Link>
+              <button
+                onClick={() => {
+                  setSelectedLeadId(task.lead_id);
+                  setIsLeadModalOpen(true);
+                }}
+                className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded transition-all"
+                title="Ver detalles del lead"
+              >
+                <Maximize2 size={14} />
+              </button>
+            </div>
             <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mt-0.5">
               {task.task_type === 'demo' ? <Video size={12} className="text-slate-400" /> : ChannelIcon && <ChannelIcon size={12} className="text-slate-400" />}
               {taskLabel(task)}
@@ -169,6 +184,16 @@ export default function MisTareasPage() {
           )}
         </>
       )}
+
+      <LeadWorkModal
+        isOpen={isLeadModalOpen}
+        leadId={selectedLeadId}
+        onClose={() => {
+          setIsLeadModalOpen(false);
+          setSelectedLeadId(null);
+        }}
+        onTaskResolved={fetchTasks}
+      />
     </div>
   );
 }
