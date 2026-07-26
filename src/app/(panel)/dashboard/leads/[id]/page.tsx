@@ -4,12 +4,22 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { supabase } from '../../../../../lib/supabase/client';
-import { ArrowLeft, Building2, Phone, Mail, MapPin, Globe } from 'lucide-react';
+import { ArrowLeft, Building2, Phone, Mail, MapPin, Globe, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
 import LeadTaskList, { type LeadTaskRow } from '../components/LeadTaskList';
 import LeadInteractionHistory from '../components/LeadInteractionHistory';
 import EmailComposer from '../components/EmailComposer';
 import ScoreChecklist, { type LeadScoreStep } from '../components/ScoreChecklist';
 import { LEAD_STATUSES } from '../page';
+
+interface PipelineStage {
+  id: string;
+  clave: string;
+  titulo: string;
+  descripcion: string | null;
+  objetivo: string | null;
+  orden: number;
+  limite_pospuestas: number;
+}
 
 interface LeadDetail {
   id: string;
@@ -37,11 +47,12 @@ export default function LeadDetailPage() {
   const [tasks, setTasks] = useState<LeadTaskRow[]>([]);
   const [scoreSteps, setScoreSteps] = useState<LeadScoreStep[]>([]);
   const [completedStepIds, setCompletedStepIds] = useState<Set<string>>(new Set());
+  const [stages, setStages] = useState<PipelineStage[]>([]);
   const [isEmailOpen, setIsEmailOpen] = useState(false);
   const [isSavingStatus, setIsSavingStatus] = useState(false);
 
   const fetchLead = useCallback(async () => {
-    const [leadRes, tasksRes, stepsRes, progressRes] = await Promise.all([
+    const [leadRes, tasksRes, stepsRes, progressRes, stagesRes] = await Promise.all([
       supabase
         .from('leads')
         .select('*, zones(city), states(name), countries(name)')
@@ -50,6 +61,7 @@ export default function LeadDetailPage() {
       supabase.from('lead_tasks').select('*').eq('lead_id', leadId).order('created_at', { ascending: false }),
       supabase.from('lead_score_steps').select('id, stage, label, weight, sort_order').order('sort_order'),
       supabase.from('lead_score_progress').select('step_id').eq('lead_id', leadId),
+      supabase.from('pipeline_stages').select('*').order('orden'),
     ]);
 
     const { data, error } = leadRes;
@@ -78,6 +90,7 @@ export default function LeadDetailPage() {
     if (tasksRes.data) setTasks(tasksRes.data);
     if (stepsRes.data) setScoreSteps(stepsRes.data);
     if (progressRes.data) setCompletedStepIds(new Set(progressRes.data.map((p) => p.step_id)));
+    if (stagesRes.data) setStages(stagesRes.data as PipelineStage[]);
     setLoading(false);
   }, [leadId]);
 
@@ -173,6 +186,52 @@ export default function LeadDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Sección de Información de Etapa del Pipeline */}
+      {stages.length > 0 && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+          {(() => {
+            const currentStage = stages.find(s => s.clave === lead.status);
+            if (!currentStage) return null;
+
+            return (
+              <div className="space-y-3">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h2 className="text-sm font-black uppercase tracking-wider text-slate-700 mb-1">Etapa Actual</h2>
+                    <p className="text-lg font-bold text-slate-950">{currentStage.titulo}</p>
+                  </div>
+                  <div className="flex items-center gap-1 px-3 py-1.5 bg-blue-100 rounded-lg">
+                    <CheckCircle2 size={13} className="text-blue-600" />
+                    <span className="text-xs font-bold text-blue-600">Paso {currentStage.orden} de {stages.length}</span>
+                  </div>
+                </div>
+
+                {currentStage.descripcion && (
+                  <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
+                    <p className="text-[10px] font-bold uppercase text-slate-500 mb-1">Descripción</p>
+                    <p className="text-sm text-slate-700">{currentStage.descripcion}</p>
+                  </div>
+                )}
+
+                {currentStage.objetivo && (
+                  <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-100">
+                    <p className="text-[10px] font-bold uppercase text-emerald-600 mb-1">Objetivo Comercial</p>
+                    <p className="text-sm text-emerald-900">{currentStage.objetivo}</p>
+                  </div>
+                )}
+
+                <div className="flex gap-3">
+                  <div className="flex-1 p-3 bg-slate-50 rounded-lg border border-slate-100">
+                    <p className="text-[10px] font-bold uppercase text-slate-500 mb-1">Límite de Pospuestas</p>
+                    <p className="text-xl font-bold text-slate-800">{currentStage.limite_pospuestas}</p>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      )}
 
       <ScoreChecklist
         leadId={lead.id}
