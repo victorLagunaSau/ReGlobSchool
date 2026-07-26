@@ -9,7 +9,7 @@ import LeadTaskList, { type LeadTaskRow } from '../components/LeadTaskList';
 import LeadInteractionHistory from '../components/LeadInteractionHistory';
 import EmailComposer from '../components/EmailComposer';
 import ScoreChecklist, { type LeadScoreStep } from '../components/ScoreChecklist';
-import { LEAD_STATUSES } from '../page';
+import { DEFAULT_LEAD_STATUSES } from '../page';
 
 interface PipelineStage {
   id: string;
@@ -142,7 +142,7 @@ export default function LeadDetailPage() {
               disabled={isSavingStatus}
               className="border border-slate-200 rounded-lg p-2 text-xs font-bold bg-white focus:outline-blue-600"
             >
-              {LEAD_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+              {DEFAULT_LEAD_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
             </select>
             <button
               onClick={() => setIsEmailOpen(true)}
