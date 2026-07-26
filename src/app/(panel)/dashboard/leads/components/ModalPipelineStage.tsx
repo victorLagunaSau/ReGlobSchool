@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, AlertCircle } from 'lucide-react';
 
 export interface PipelineStageFormData {
@@ -43,6 +43,33 @@ export default function ModalPipelineStage({
     }
   );
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Update form data when stage changes
+  useEffect(() => {
+    if (stage) {
+      setFormData({
+        clave: stage.clave || '',
+        titulo: stage.titulo || '',
+        descripcion: stage.descripcion || '',
+        objetivo: stage.objetivo || '',
+        orden: stage.orden || 0,
+        limite_pospuestas: stage.limite_pospuestas || 3,
+        intentos_requeridos: stage.intentos_requeridos || 1,
+      });
+    } else {
+      setFormData({
+        clave: '',
+        titulo: '',
+        descripcion: '',
+        objetivo: '',
+        orden: 0,
+        limite_pospuestas: 3,
+        intentos_requeridos: 1,
+      });
+    }
+    setStep('form');
+    setErrors({});
+  }, [stage, isOpen]);
 
   if (!isOpen) return null;
 
