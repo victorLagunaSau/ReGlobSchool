@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import { supabase } from '../../../../../lib/supabase/client';
 import { ArrowLeft, Building2, Phone, Mail, MapPin, Globe } from 'lucide-react';
 import LeadTaskList, { type LeadTaskRow } from '../components/LeadTaskList';
+import LeadInteractionHistory from '../components/LeadInteractionHistory';
 import EmailComposer from '../components/EmailComposer';
 import ScoreChecklist, { type LeadScoreStep } from '../components/ScoreChecklist';
 import { LEAD_STATUSES } from '../page';
@@ -182,6 +183,8 @@ export default function LeadDetailPage() {
       />
 
       <LeadTaskList leadId={lead.id} tasks={tasks} onRefresh={fetchLead} />
+
+      <LeadInteractionHistory leadId={lead.id} onRefresh={fetchLead} />
 
       <EmailComposer
         isOpen={isEmailOpen}
