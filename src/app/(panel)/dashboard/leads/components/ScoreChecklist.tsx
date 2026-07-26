@@ -4,7 +4,7 @@ import React, { useMemo } from 'react';
 import { supabase } from '../../../../../lib/supabase/client';
 import { Target } from 'lucide-react';
 import { scoreStyle } from '../../../../../lib/lead-score';
-import { LEAD_STATUSES } from '../page';
+import { DEFAULT_LEAD_STATUSES } from '../page';
 
 export interface LeadScoreStep {
   id: string;
@@ -22,7 +22,7 @@ interface ScoreChecklistProps {
   onRefresh: () => void;
 }
 
-const STAGES = LEAD_STATUSES.filter((s) => s.value !== 'descartado');
+const STAGES = DEFAULT_LEAD_STATUSES.filter((s) => s.value !== 'descartado');
 
 export default function ScoreChecklist({ leadId, scorePercent, steps, completedStepIds, onRefresh }: ScoreChecklistProps) {
   const stepsByStage = useMemo(() => {
