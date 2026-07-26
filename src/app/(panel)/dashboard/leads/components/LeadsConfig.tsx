@@ -252,7 +252,7 @@ export default function LeadsConfig({ stages, onRefresh }: LeadsConfigProps) {
 
       {/* Delete Confirmation Modal */}
       {deleteConfirmId && (
-        <div className="fixed inset-0 bg-black bg-opacity-20 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-10 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-lg max-w-sm w-full p-6">
             <h3 className="font-bold text-slate-900 mb-2">Confirmar Eliminación</h3>
             <p className="text-xs text-slate-600 mb-4">
