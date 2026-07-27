@@ -91,7 +91,7 @@ export default function LeadsPage() {
     ]);
 
     // Try to fetch pipeline_stages, but don't block if it fails (table might not exist yet)
-    let stagesRes = { data: null, error: null };
+    let stagesRes: any = { data: null, error: null };
     try {
       stagesRes = await supabase
         .from('pipeline_stages')

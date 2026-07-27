@@ -31,8 +31,19 @@ export default function ModalPipelineStage({
   onConfirm,
 }: ModalPipelineStageProp) {
   const [step, setStep] = useState<'form' | 'confirm'>('form');
-  const [formData, setFormData] = useState<PipelineStageFormData>(
-    stage || {
+  const [formData, setFormData] = useState<PipelineStageFormData>(() => {
+    if (stage) {
+      return {
+        clave: stage.clave || '',
+        titulo: stage.titulo || '',
+        descripcion: stage.descripcion || '',
+        objetivo: stage.objetivo || '',
+        orden: stage.orden || 0,
+        limite_pospuestas: stage.limite_pospuestas || 3,
+        intentos_requeridos: stage.intentos_requeridos || 1,
+      };
+    }
+    return {
       clave: '',
       titulo: '',
       descripcion: '',
@@ -40,8 +51,8 @@ export default function ModalPipelineStage({
       orden: 0,
       limite_pospuestas: 3,
       intentos_requeridos: 1,
-    }
-  );
+    };
+  });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Update form data when stage changes

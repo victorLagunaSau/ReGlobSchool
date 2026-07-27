@@ -32,10 +32,20 @@ export default function LeadsConfig({ stages, onRefresh }: LeadsConfigProps) {
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
-  const editingStage = useMemo(
-    () => stages.find(s => s.id === editingStageId),
-    [stages, editingStageId]
-  );
+  const editingStage = useMemo(() => {
+    const stage = stages.find(s => s.id === editingStageId);
+    if (!stage) return undefined;
+    return {
+      id: stage.id,
+      clave: stage.clave,
+      titulo: stage.titulo,
+      descripcion: stage.descripcion || '',
+      objetivo: stage.objetivo || '',
+      orden: stage.orden,
+      limite_pospuestas: stage.limite_pospuestas,
+      intentos_requeridos: stage.intentos_requeridos,
+    };
+  }, [stages, editingStageId]);
 
   const sortedStages = useMemo(() => {
     if (!sortColumn) return stages;

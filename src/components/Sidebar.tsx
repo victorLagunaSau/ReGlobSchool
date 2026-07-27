@@ -20,8 +20,8 @@ export default function Sidebar({ isOpen, setIsOpen, onLogout }: SidebarProps) {
     { name: 'UNES', href: '/dashboard/unes', icon: GraduationCap },
     { name: 'Zonas', href: '/dashboard/zonas', icon: MapPin },
     { name: 'Mapas', href: '/dashboard/maps', icon: Map },
-    { name: 'Leads', href: '/dashboard/leads', icon: Users },
     { name: 'Buscar Negocios', href: '/dashboard/leads/search', icon: Search },
+    { name: 'Leads', href: '/dashboard/leads', icon: Users },
     { name: 'Mis Tareas', href: '/dashboard/tasks', icon: ListChecks },
   ];
 

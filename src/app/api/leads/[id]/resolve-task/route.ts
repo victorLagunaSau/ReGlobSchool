@@ -94,10 +94,11 @@ async function validatePostponementLimit(
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse<ResolveTaskResponse>> {
   try {
-    const leadId = params.id;
+    const { id } = await params;
+    const leadId = id;
     const cookieStore = await cookies();
 
     // Validar autenticación
