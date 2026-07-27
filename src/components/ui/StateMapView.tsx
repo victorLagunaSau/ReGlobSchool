@@ -93,7 +93,7 @@ export default function StateMapView({
 
         if (!matchedZone) return "#e2e8f0"; // Gris si no existe
 
-        const val = matchedZone.assignedTo;
+        const val = matchedZone.assigned_to || matchedZone.assignedTo;
         const cleanVal = val ? String(val).trim().toLowerCase() : "";
         const isOcupada = cleanVal !== "" && cleanVal !== "libre";
 

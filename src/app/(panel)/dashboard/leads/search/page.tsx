@@ -15,6 +15,9 @@ interface ZoneWithStatus {
   country_id: string;
   state_id: string;
   city: string;
+  assigned_to: string | null;
+  cve_municipio?: number;
+  cvegeo?: string;
   isLibre: boolean;
 }
 
@@ -65,27 +68,74 @@ export default function LeadsSearchPage() {
 
   useEffect(() => {
     (async () => {
-      const [countriesRes, statesRes, zonesRes] = await Promise.all([
+      const fetchAllZones = async () => {
+        const pageSize = 1000;
+        let allZones: any[] = [];
+        let offset = 0;
+        let pageNumber = 0;
+
+        try {
+          while (true) {
+            pageNumber++;
+            console.log(`📄 Fetching page ${pageNumber}: offset=${offset}, limit=${pageSize}`);
+
+            const { data, error, count } = await supabase
+              .from('zones')
+              .select('id, country_id, state_id, city, assigned_to, cve_municipio, cvegeo', { count: 'exact' })
+              .range(offset, offset + pageSize - 1);
+
+            if (error) {
+              console.error(`❌ Error página ${pageNumber}:`, error);
+              break;
+            }
+
+            if (!data || data.length === 0) {
+              console.log(`✅ Fin de datos en página ${pageNumber}`);
+              break;
+            }
+
+            console.log(`✓ Página ${pageNumber}: ${data.length} registros. Total: ${allZones.length + data.length}/${count}`);
+            allZones = allZones.concat(data);
+
+            // Si obtuvimos menos registros que el page size, llegamos al final
+            if (data.length < pageSize) {
+              console.log(`✅ Última página completada. Total de zonas: ${allZones.length}`);
+              break;
+            }
+
+            offset += pageSize;
+          }
+        } catch (error) {
+          console.error('❌ Error en fetchAllZones:', error);
+        }
+
+        console.log(`📊 Zonas totales cargadas: ${allZones.length}`);
+        return allZones;
+      };
+
+      const [countriesRes, statesRes, zonesData] = await Promise.all([
         supabase.from('countries').select('id, name').order('name'),
         supabase.from('states').select('id, country_id, cve_estado, name').order('name'),
-        supabase.from('zones').select('id, country_id, state_id, city, assigned_to').order('city'),
+        fetchAllZones(),
       ]);
 
       if (countriesRes.data) setCountries(countriesRes.data);
       if (statesRes.data) setStates(statesRes.data);
-      if (zonesRes.data) {
-        console.log('Zonas cargadas:', zonesRes.data.length);
-        setZones(
-          zonesRes.data.map((z) => ({
-            id: z.id,
-            country_id: z.country_id,
-            state_id: z.state_id,
-            city: z.city,
-            isLibre: isZoneLibre(z.assigned_to),
-          }))
-        );
+      if (zonesData && zonesData.length > 0) {
+        const mappedZones = zonesData.map((z) => ({
+          id: z.id,
+          country_id: z.country_id,
+          state_id: z.state_id,
+          city: z.city,
+          assigned_to: z.assigned_to,
+          cve_municipio: z.cve_municipio,
+          cvegeo: z.cvegeo,
+          isLibre: isZoneLibre(z.assigned_to),
+        }));
+        console.log('✅ Mapeadas', mappedZones.length, 'zonas');
+        setZones(mappedZones);
       } else {
-        console.log('Error al cargar zonas:', zonesRes.error);
+        console.log('⚠️ Sin datos de zonas');
       }
       setLoading(false);
     })();
@@ -142,8 +192,11 @@ export default function LeadsSearchPage() {
     });
   };
 
-  const handleMapZonesSelected = (selectedZones: Set<string>) => {
+  const handleMapZonesSelected = (selectedZones: Set<string>, stateId?: string) => {
     setSelectedZoneIds((prev) => new Set([...prev, ...selectedZones]));
+    if (stateId) {
+      setSelectedState(stateId);
+    }
   };
 
   const handleSearch = async (e: React.FormEvent) => {
@@ -404,7 +457,7 @@ export default function LeadsSearchPage() {
                 >
                   <option value="">Selecciona...</option>
                   {availableStates.map((s) => (
-                    <option key={s.id} value={s.id}>{s.name} {s.occupancyPercent}%</option>
+                    <option key={s.id} value={s.id}>{s.name}</option>
                   ))}
                 </select>
               </div>
@@ -470,7 +523,7 @@ export default function LeadsSearchPage() {
                 >
                   <option value="">Estado</option>
                   {availableStates.map((s) => (
-                    <option key={s.id} value={s.id}>{s.name} {s.occupancyPercent}%</option>
+                    <option key={s.id} value={s.id}>{s.name}</option>
                   ))}
                 </select>
 
