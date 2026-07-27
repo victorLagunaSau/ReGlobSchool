@@ -58,7 +58,8 @@ export default function ZonasPage() {
       supabase
         .from('zones')
         .select('*, states(name, cod_estado, countries(name))')
-        .order('city'),
+        .order('city')
+        .range(0, 9999),
     ]);
 
     if (countriesRes.data) setCountries(countriesRes.data);
