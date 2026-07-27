@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { supabase } from '../../../../../lib/supabase/client';
-import { Search, MapPin, Phone, Mail, Globe, Maximize2 } from 'lucide-react';
+import { Search, MapPin, Phone, Mail, Globe, Maximize2, Calendar, Clock } from 'lucide-react';
 import { scoreStyle } from '../../../../../lib/lead-score';
 import LeadWorkModal from './LeadWorkModal';
 import type { LeadRow, StateRow, PipelineStage, DEFAULT_LEAD_STATUSES } from '../page';
@@ -38,6 +38,8 @@ export default function LeadsKanban({ leads, states, stages, onRefresh }: LeadsK
   const [dragOverStatus, setDragOverStatus] = useState<string | null>(null);
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [isLeadModalOpen, setIsLeadModalOpen] = useState(false);
+  const [schedulingLeadId, setSchedulingLeadId] = useState<string | null>(null);
+  const [scheduledDate, setScheduledDate] = useState('');
 
   const filteredLeads = useMemo(() => {
     return leads.filter((l) => {
@@ -81,6 +83,42 @@ export default function LeadsKanban({ leads, states, stages, onRefresh }: LeadsK
       return;
     }
     onRefresh();
+  };
+
+  const handleScheduleLead = async (leadId: string, date: string) => {
+    if (!date) return;
+
+    try {
+      // Get the first pending task for this lead
+      const { data: tasks, error: tasksError } = await supabase
+        .from('lead_tasks')
+        .select('id')
+        .eq('lead_id', leadId)
+        .eq('status', 'pendiente')
+        .order('created_at', { ascending: true })
+        .limit(1);
+
+      if (tasksError) throw tasksError;
+      if (!tasks || tasks.length === 0) {
+        alert('No hay tareas pendientes para este lead');
+        return;
+      }
+
+      const taskId = tasks[0].id;
+      const { error } = await supabase
+        .from('lead_tasks')
+        .update({ scheduled_for: date })
+        .eq('id', taskId);
+
+      if (error) throw error;
+
+      setSchedulingLeadId(null);
+      setScheduledDate('');
+      onRefresh();
+    } catch (error) {
+      console.error('Error al calendarizar lead:', error);
+      alert('Error al calendarizar el lead');
+    }
   };
 
   return (
@@ -165,6 +203,43 @@ export default function LeadsKanban({ leads, states, stages, onRefresh }: LeadsK
                     </div>
                     <span className="text-[8px] font-bold text-slate-300 uppercase">{SOURCE_LABELS[lead.source] || lead.source}</span>
                   </div>
+
+                  {schedulingLeadId === lead.id && (
+                    <div className="pt-2 border-t border-slate-100 bg-slate-50/50 -mx-3 -mb-3 px-3 py-2 rounded-b-xl space-y-1.5">
+                      <label className="block text-[10px] font-bold text-slate-700">Calendarizar:</label>
+                      <div className="flex gap-1.5">
+                        <input
+                          type="date"
+                          value={scheduledDate}
+                          onChange={(e) => setScheduledDate(e.target.value)}
+                          className="flex-1 px-2 py-1 text-xs border border-slate-200 rounded"
+                        />
+                        <button
+                          onClick={() => handleScheduleLead(lead.id, scheduledDate)}
+                          className="px-2 py-1 bg-blue-600 text-white text-xs font-bold rounded hover:bg-blue-700"
+                        >
+                          ✓
+                        </button>
+                        <button
+                          onClick={() => setSchedulingLeadId(null)}
+                          className="px-2 py-1 border border-slate-200 text-xs font-bold rounded hover:bg-slate-100"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {schedulingLeadId !== lead.id && (
+                    <button
+                      onClick={() => setSchedulingLeadId(lead.id)}
+                      className="w-full mt-2 flex items-center justify-center gap-1.5 py-1.5 px-2 text-[10px] font-bold text-slate-600 bg-slate-100/50 hover:bg-slate-100 rounded-lg transition-colors"
+                      title="Calendarizar para activar"
+                    >
+                      <Calendar size={12} />
+                      Calendarizar
+                    </button>
+                  )}
                 </div>
               ))}
 
