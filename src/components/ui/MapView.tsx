@@ -11,6 +11,7 @@ interface MapViewProps {
     viewBox?: string;
     onStateHover?: (stateInfo: any | null) => void;
     onStateClick?: (stateInfo: any) => void;
+    overlay?: React.ReactNode;
 }
 
 export default function MapView({
@@ -19,7 +20,8 @@ export default function MapView({
     projectionConfig = { scale: 1000, center: [-102.5528, 23.6345] },
     viewBox = "100 50 600 600",
     onStateHover,
-    onStateClick
+    onStateClick,
+    overlay
 }: MapViewProps) {
 
     const getColor = (item: any) => {
@@ -88,6 +90,11 @@ export default function MapView({
                     }
                 </Geographies>
             </ComposableMap>
+            {overlay && (
+                <div className="absolute top-4 left-4 bg-white/95 px-3 py-1.5 rounded shadow-sm z-10 pointer-events-none">
+                    {overlay}
+                </div>
+            )}
         </div>
     );
 }
