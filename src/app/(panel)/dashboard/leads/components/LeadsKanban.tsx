@@ -89,6 +89,9 @@ export default function LeadsKanban({ leads, states, stages, onRefresh }: LeadsK
     if (!date) return;
 
     try {
+      const lead = leads.find(l => l.id === leadId);
+      if (!lead) return;
+
       // Get the first pending task for this lead
       const { data: tasks, error: tasksError } = await supabase
         .from('lead_tasks')
@@ -104,13 +107,27 @@ export default function LeadsKanban({ leads, states, stages, onRefresh }: LeadsK
         return;
       }
 
+      // Update task with scheduled date
       const taskId = tasks[0].id;
-      const { error } = await supabase
+      const { error: taskError } = await supabase
         .from('lead_tasks')
         .update({ scheduled_for: date })
         .eq('id', taskId);
 
-      if (error) throw error;
+      if (taskError) throw taskError;
+
+      // Move lead to next stage
+      const currentStage = stages.find(s => s.clave === lead.status);
+      const nextStage = stages.find(s => currentStage && s.orden === currentStage.orden + 1);
+
+      if (nextStage) {
+        const { error: leadError } = await supabase
+          .from('leads')
+          .update({ status: nextStage.clave })
+          .eq('id', leadId);
+
+        if (leadError) throw leadError;
+      }
 
       setSchedulingLeadId(null);
       setScheduledDate('');
@@ -230,16 +247,20 @@ export default function LeadsKanban({ leads, states, stages, onRefresh }: LeadsK
                     </div>
                   )}
 
-                  {schedulingLeadId !== lead.id && (
-                    <button
-                      onClick={() => setSchedulingLeadId(lead.id)}
-                      className="w-full mt-2 flex items-center justify-center gap-1.5 py-1.5 px-2 text-[10px] font-bold text-slate-600 bg-slate-100/50 hover:bg-slate-100 rounded-lg transition-colors"
-                      title="Calendarizar para activar"
-                    >
-                      <Calendar size={12} />
-                      Calendarizar
-                    </button>
-                  )}
+                  {schedulingLeadId !== lead.id && (() => {
+                    const leadStage = stages.find(s => s.clave === lead.status);
+                    const isFirstStage = leadStage && leadStage.orden === 1;
+                    return isFirstStage && (
+                      <button
+                        onClick={() => setSchedulingLeadId(lead.id)}
+                        className="w-full mt-2 flex items-center justify-center gap-1.5 py-1.5 px-2 text-[10px] font-bold text-slate-600 bg-slate-100/50 hover:bg-slate-100 rounded-lg transition-colors"
+                        title="Calendarizar para activar"
+                      >
+                        <Calendar size={12} />
+                        Calendarizar
+                      </button>
+                    );
+                  })()}
                 </div>
               ))}
 
