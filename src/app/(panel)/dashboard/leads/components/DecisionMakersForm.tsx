@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Loader2 } from 'lucide-react';
+import { X, Plus, Loader2, Phone, Mail } from 'lucide-react';
 import { supabase } from '../../../../../lib/supabase/client';
 
 interface DecisionMaker {
@@ -205,12 +205,18 @@ export default function DecisionMakersForm({
                   </button>
                 )}
               </div>
-              <div className="space-y-0.5">
+              <div className="space-y-1">
                 {dm.telefono && (
-                  <p className="text-[10px] text-slate-600">📱 {dm.telefono}</p>
+                  <div className="flex items-center gap-1.5 text-[10px] text-slate-600">
+                    <Phone size={12} className="text-slate-400" />
+                    <span>{dm.telefono}</span>
+                  </div>
                 )}
                 {dm.email && (
-                  <p className="text-[10px] text-slate-600">✉️ {dm.email}</p>
+                  <div className="flex items-center gap-1.5 text-[10px] text-slate-600">
+                    <Mail size={12} className="text-slate-400" />
+                    <span>{dm.email}</span>
+                  </div>
                 )}
               </div>
             </div>
