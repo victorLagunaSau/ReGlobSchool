@@ -55,6 +55,8 @@ export default function ContactAttemptModal({
   const [emailAttempted, setEmailAttempted] = useState(false);
   const [selectedOutcome, setSelectedOutcome] = useState<'exito' | 'reintentar' | 'descartar' | null>(null);
   const [note, setNote] = useState('');
+  const [decisionMakers, setDecisionMakers] = useState<string[]>([]);
+  const [newDecisionMaker, setNewDecisionMaker] = useState('');
 
   // Success flow state
   const [scheduledDate, setScheduledDate] = useState('');
@@ -190,6 +192,26 @@ export default function ContactAttemptModal({
       }
 
       await saveAttemptNote('success');
+
+      // Log interaction with decision makers
+      await supabase
+        .from('lead_interactions')
+        .insert({
+          lead_id: currentTask.lead_id,
+          interaction_type: 'task_outcome',
+          actor_id: (await supabase.auth.getUser()).data.user?.id,
+          action_label: 'Contacto exitoso',
+          message: note.trim(),
+          metadata: {
+            contact_methods: {
+              llamada: callAttempted,
+              email: emailAttempted,
+            },
+            decision_makers: decisionMakers,
+            scheduled_date: scheduledDate,
+            modality: modality,
+          },
+        });
 
       await resolveTaskWithPipeline(
         {
@@ -495,7 +517,15 @@ export default function ContactAttemptModal({
 
               {/* Action Buttons */}
               <div className="space-y-3 bg-slate-50 p-4 rounded-lg border border-slate-200">
-                <p className="text-xs font-bold text-slate-600 uppercase">Acciones de Contacto</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-bold text-slate-600 uppercase">Acciones de Contacto</p>
+                  {(callAttempted || emailAttempted) && (
+                    <div className="flex gap-1 text-xs">
+                      {callAttempted && <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded font-bold flex items-center gap-1"><Phone size={10} />✓</span>}
+                      {emailAttempted && <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded font-bold flex items-center gap-1"><Mail size={10} />✓</span>}
+                    </div>
+                  )}
+                </div>
                 <div className="space-y-3">
                   {lead.phone && (
                     <div>
@@ -509,12 +539,12 @@ export default function ContactAttemptModal({
                         disabled={isSubmitting}
                         className={`w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg font-semibold text-sm transition-all ${
                           callAttempted
-                            ? 'bg-emerald-100 border border-emerald-300 text-emerald-900'
+                            ? 'bg-emerald-100 border-2 border-emerald-400 text-emerald-900'
                             : 'bg-slate-100 border border-slate-200 text-slate-700 hover:bg-slate-200'
                         } disabled:opacity-50`}
                       >
                         <Phone size={16} />
-                        {callAttempted ? 'Llamada Realizada' : 'Registrar Llamada'}
+                        {callAttempted ? '✓ Llamada Realizada' : 'Registrar Llamada'}
                       </button>
                     </div>
                   )}
@@ -530,12 +560,12 @@ export default function ContactAttemptModal({
                         disabled={isSubmitting}
                         className={`w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg font-semibold text-sm transition-all ${
                           emailAttempted
-                            ? 'bg-emerald-100 border border-emerald-300 text-emerald-900'
+                            ? 'bg-emerald-100 border-2 border-emerald-400 text-emerald-900'
                             : 'bg-slate-100 border border-slate-200 text-slate-700 hover:bg-slate-200'
                         } disabled:opacity-50`}
                       >
                         <Mail size={16} />
-                        {emailAttempted ? 'Email Enviado' : 'Registrar Email'}
+                        {emailAttempted ? '✓ Email Enviado' : 'Registrar Email'}
                       </button>
                     </div>
                   )}
@@ -773,8 +803,58 @@ export default function ContactAttemptModal({
           {/* Right Panel: Notes & History */}
           <div className="w-80 bg-slate-50 p-4 flex flex-col border-l border-slate-200 overflow-hidden">
             <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 mb-3">
-              Notas & Historial
+              Notas & Decisiones
             </h3>
+
+            {/* Decision Makers Section */}
+            <div className="mb-4 pb-4 border-b border-slate-200">
+              <label className="block text-xs font-bold text-slate-700 mb-2">
+                Tomadores de Decisiones
+              </label>
+              <div className="flex gap-1 mb-2">
+                <input
+                  type="text"
+                  value={newDecisionMaker}
+                  onChange={(e) => setNewDecisionMaker(e.target.value)}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter' && newDecisionMaker.trim()) {
+                      setDecisionMakers([...decisionMakers, newDecisionMaker.trim()]);
+                      setNewDecisionMaker('');
+                    }
+                  }}
+                  placeholder="Nombre del contacto"
+                  className="flex-1 px-2 py-1 border border-slate-300 rounded text-xs"
+                  disabled={isSubmitting}
+                />
+                <button
+                  onClick={() => {
+                    if (newDecisionMaker.trim()) {
+                      setDecisionMakers([...decisionMakers, newDecisionMaker.trim()]);
+                      setNewDecisionMaker('');
+                    }
+                  }}
+                  disabled={isSubmitting || !newDecisionMaker.trim()}
+                  className="px-2 py-1 bg-slate-700 text-white text-xs font-bold rounded hover:bg-slate-800 disabled:opacity-50"
+                >
+                  +
+                </button>
+              </div>
+              {decisionMakers.length > 0 && (
+                <div className="space-y-1">
+                  {decisionMakers.map((dm, idx) => (
+                    <div key={idx} className="flex items-center justify-between bg-white rounded px-2 py-1 text-xs">
+                      <span className="text-slate-700">{dm}</span>
+                      <button
+                        onClick={() => setDecisionMakers(decisionMakers.filter((_, i) => i !== idx))}
+                        className="text-slate-400 hover:text-red-600 font-bold"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
             {/* Notes Input */}
             {selectedOutcome && (
@@ -788,7 +868,7 @@ export default function ContactAttemptModal({
                   disabled={isSubmitting}
                   placeholder="Describe lo que sucedió..."
                   maxLength={500}
-                  rows={4}
+                  rows={3}
                   className="w-full px-2 py-1.5 border border-slate-300 rounded-lg text-xs resize-none focus:outline-slate-400 disabled:opacity-60"
                 />
                 <p className="text-[10px] text-slate-600 mt-1">
