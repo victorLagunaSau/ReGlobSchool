@@ -9,6 +9,7 @@ import LeadTaskList, { type LeadTaskRow } from '../components/LeadTaskList';
 import LeadInteractionHistory from '../components/LeadInteractionHistory';
 import EmailComposer from '../components/EmailComposer';
 import ScoreChecklist, { type LeadScoreStep } from '../components/ScoreChecklist';
+import ContactAttemptModal from '../components/ContactAttemptModal';
 import { DEFAULT_LEAD_STATUSES } from '../page';
 
 interface PipelineStage {
@@ -50,6 +51,7 @@ export default function LeadDetailPage() {
   const [stages, setStages] = useState<PipelineStage[]>([]);
   const [isEmailOpen, setIsEmailOpen] = useState(false);
   const [isSavingStatus, setIsSavingStatus] = useState(false);
+  const [isAttemptModalOpen, setIsAttemptModalOpen] = useState(false);
 
   const fetchLead = useCallback(async () => {
     const [leadRes, tasksRes, stepsRes, progressRes, stagesRes] = await Promise.all([
@@ -135,7 +137,7 @@ export default function LeadDetailPage() {
             <h1 className="text-lg font-black text-slate-950">{lead.business_name}</h1>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <select
               value={lead.status}
               onChange={(e) => handleStatusChange(e.target.value)}
@@ -144,6 +146,14 @@ export default function LeadDetailPage() {
             >
               {DEFAULT_LEAD_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
             </select>
+            {lead.status === 'llamada' && (
+              <button
+                onClick={() => setIsAttemptModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-2 bg-slate-900 text-white rounded-lg text-xs font-bold hover:bg-slate-800"
+              >
+                <Phone size={13} /> Gestionar Intentos
+              </button>
+            )}
             <button
               onClick={() => setIsEmailOpen(true)}
               className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700"
@@ -252,6 +262,27 @@ export default function LeadDetailPage() {
         leadEmail={lead.email}
         leadName={lead.business_name}
         onSent={fetchLead}
+      />
+
+      <ContactAttemptModal
+        isOpen={isAttemptModalOpen}
+        leadId={lead.id}
+        lead={{
+          id: lead.id,
+          business_name: lead.business_name,
+          business_type: lead.business_type,
+          phone: lead.phone,
+          email: lead.email,
+          address: lead.address,
+          website: lead.website,
+          zone_city: lead.zone_city,
+          state_name: lead.state_name,
+          country_name: lead.country_name,
+          created_at: lead.created_at,
+        }}
+        stages={stages}
+        onClose={() => setIsAttemptModalOpen(false)}
+        onTaskResolved={fetchLead}
       />
     </div>
   );
