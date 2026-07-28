@@ -167,127 +167,147 @@ export default function LeadsConfig({ stages, onRefresh }: LeadsConfigProps) {
   );
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-bold text-slate-900">Etapas del Pipeline</h2>
-          <p className="text-xs text-slate-500 mt-1">
-            {stages.length} etapa{stages.length !== 1 ? 's' : ''} configurada{stages.length !== 1 ? 's' : ''}
-          </p>
+    <div className="space-y-8">
+      {/* Header Section */}
+      <div className="bg-gradient-to-r from-slate-50 to-slate-100 rounded-2xl border border-slate-200 p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-slate-900">Etapas del Pipeline</h2>
+            <p className="text-sm text-slate-600 mt-2">
+              {stages.length} etapa{stages.length !== 1 ? 's' : ''} configurada{stages.length !== 1 ? 's' : ''} • Gestiona los flujos de prospección
+            </p>
+          </div>
+          <button
+            onClick={handleNewStage}
+            className="flex items-center gap-2 px-6 py-3 bg-slate-900 text-white rounded-xl text-sm font-bold hover:bg-slate-800 transition-all shadow-lg hover:shadow-xl"
+          >
+            <Plus size={16} />
+            Nueva Etapa
+          </button>
         </div>
-        <button
-          onClick={handleNewStage}
-          className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg text-xs font-bold hover:bg-slate-800 transition-all"
-        >
-          <Plus size={14} />
-          Nueva Etapa
-        </button>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="border-b-2 border-slate-200 bg-slate-50">
-              <th className="px-4 py-3 text-left font-bold text-slate-700">
-                <SortHeader column="orden" label="Orden" />
-              </th>
-              <th className="px-4 py-3 text-left font-bold text-slate-700">
-                <SortHeader column="clave" label="Clave" />
-              </th>
-              <th className="px-4 py-3 text-left font-bold text-slate-700">
-                <SortHeader column="titulo" label="Título" />
-              </th>
-              <th className="px-4 py-3 text-left font-bold text-slate-700">
-                Descripción
-              </th>
-              <th className="px-4 py-3 text-left font-bold text-slate-700">
-                Límite Pospuestas
-              </th>
-              <th className="px-4 py-3 text-left font-bold text-slate-700">
-                Intentos Req.
-              </th>
-              <th className="px-4 py-3 text-left font-bold text-slate-700">
-                Tipo
-              </th>
-              <th className="px-4 py-3 text-left font-bold text-slate-700">
-                Tasa Éxito
-              </th>
-              <th className="px-4 py-3 text-center font-bold text-slate-700">
-                Acciones
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {sortedStages.map(stage => (
-              <tr
-                key={stage.id}
-                className="border-b border-slate-100 hover:bg-slate-50 transition-colors"
-              >
-                <td className="px-4 py-3 font-mono font-bold text-slate-900">
-                  {stage.orden}
-                </td>
-                <td className="px-4 py-3">
-                  <span className="inline-block bg-blue-50 text-blue-700 px-2 py-1 rounded font-mono text-xs font-bold">
-                    {stage.clave}
-                  </span>
-                </td>
-                <td className="px-4 py-3 font-bold text-slate-900">
-                  {stage.titulo}
-                </td>
-                <td className="px-4 py-3 text-slate-600 max-w-xs truncate">
-                  {stage.descripcion || '—'}
-                </td>
-                <td className="px-4 py-3 text-center font-bold">
-                  <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${
-                    stage.limite_pospuestas === 0
-                      ? 'bg-red-50 text-red-700'
-                      : 'bg-amber-50 text-amber-700'
-                  }`}>
-                    {stage.limite_pospuestas}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-center font-bold">
-                  {stage.intentos_requeridos}
-                </td>
-                <td className="px-4 py-3">
-                  <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${
-                    stage.tipo === 'inicial' ? 'bg-slate-100 text-slate-700' :
-                    stage.tipo === 'contacto' ? 'bg-amber-50 text-amber-700' :
-                    stage.tipo === 'reunion' ? 'bg-blue-50 text-blue-700' :
-                    stage.tipo === 'cierre' ? 'bg-emerald-50 text-emerald-700' :
-                    'bg-purple-50 text-purple-700'
-                  }`}>
-                    {stage.tipo || 'contacto'}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-center font-bold">
-                  <span className="inline-block px-2 py-1 rounded text-xs font-bold bg-indigo-50 text-indigo-700">
-                    {stage.tasa_exito || 0}%
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-center">
-                  <div className="flex justify-center gap-2">
-                    <button
-                      onClick={() => handleEditStage(stage.id)}
-                      className="px-2 py-1 bg-blue-50 text-blue-700 rounded hover:bg-blue-100 transition-all text-xs font-bold"
-                    >
-                      Editar
-                    </button>
-                    <button
-                      onClick={() => setDeleteConfirmId(stage.id)}
-                      className="p-1 text-red-500 hover:bg-red-50 rounded transition-all"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                </td>
+      {/* Table Section */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
+          <h3 className="font-bold text-slate-900">Configuración de Etapas</h3>
+          <p className="text-xs text-slate-600 mt-1">Vista tabular de todas las etapas y sus parámetros</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50">
+                <th className="px-6 py-4 text-left font-bold text-slate-700">
+                  <SortHeader column="orden" label="Orden" />
+                </th>
+                <th className="px-6 py-4 text-left font-bold text-slate-700">
+                  <SortHeader column="clave" label="Clave" />
+                </th>
+                <th className="px-6 py-4 text-left font-bold text-slate-700">
+                  <SortHeader column="titulo" label="Título" />
+                </th>
+                <th className="px-6 py-4 text-left font-bold text-slate-700">
+                  Descripción
+                </th>
+                <th className="px-6 py-4 text-center font-bold text-slate-700">
+                  Límite Pospuestas
+                </th>
+                <th className="px-6 py-4 text-center font-bold text-slate-700">
+                  Intentos Máx.
+                </th>
+                <th className="px-6 py-4 text-center font-bold text-slate-700">
+                  Tipo
+                </th>
+                <th className="px-6 py-4 text-center font-bold text-slate-700">
+                  Tasa Éxito
+                </th>
+                <th className="px-6 py-4 text-center font-bold text-slate-700">
+                  Acciones
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {sortedStages.map((stage, idx) => (
+                <tr
+                  key={stage.id}
+                  className={`border-b border-slate-100 hover:bg-slate-50 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`}
+                >
+                  <td className="px-6 py-4 font-mono font-bold text-slate-900">
+                    {stage.orden}
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className="inline-block bg-blue-100 text-blue-700 px-3 py-1 rounded-lg font-mono text-xs font-bold">
+                      {stage.clave}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 font-bold text-slate-900">
+                    {stage.titulo}
+                  </td>
+                  <td className="px-6 py-4 text-slate-600 max-w-xs">
+                    <span title={stage.descripcion || ''} className="line-clamp-1">
+                      {stage.descripcion || '—'}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                    <span className={`inline-block px-3 py-1 rounded-lg text-xs font-bold ${
+                      stage.limite_pospuestas === 0
+                        ? 'bg-red-100 text-red-700'
+                        : 'bg-amber-100 text-amber-700'
+                    }`}>
+                      {stage.limite_pospuestas}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-center font-bold text-slate-900">
+                    {stage.intentos_requeridos}
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                    <span className={`inline-block px-3 py-1 rounded-lg text-xs font-bold ${
+                      stage.tipo === 'inicial' ? 'bg-slate-100 text-slate-700' :
+                      stage.tipo === 'contacto' ? 'bg-amber-100 text-amber-700' :
+                      stage.tipo === 'reunion' ? 'bg-blue-100 text-blue-700' :
+                      stage.tipo === 'cierre' ? 'bg-emerald-100 text-emerald-700' :
+                      'bg-purple-100 text-purple-700'
+                    }`}>
+                      {stage.tipo || 'contacto'}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                    <span className="inline-block px-3 py-1 rounded-lg text-xs font-bold bg-indigo-100 text-indigo-700">
+                      {stage.tasa_exito || 0}%
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                    <div className="flex justify-center gap-3">
+                      <button
+                        onClick={() => handleEditStage(stage.id)}
+                        className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-all text-xs font-bold"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        onClick={() => setDeleteConfirmId(stage.id)}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                        title="Eliminar etapa"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      <PipelineFlowDiagram stages={stages} />
+      {/* Flow Diagram Section */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+        <div className="mb-6">
+          <h3 className="font-bold text-slate-900 text-lg">Flujo del Pipeline</h3>
+          <p className="text-sm text-slate-600 mt-1">Visualización de los caminos de éxito y fracaso en cada etapa</p>
+        </div>
+        <PipelineFlowDiagram stages={stages} />
+      </div>
 
       <ModalPipelineStage
         isOpen={isModalOpen}
