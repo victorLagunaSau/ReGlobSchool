@@ -67,12 +67,24 @@ export default function PipelineFlowDiagram({ stages }: PipelineFlowDiagramProps
                   {/* Divider */}
                   <div className="border-b border-slate-200 mb-4"></div>
 
+                  {/* Description */}
+                  {stage.descripcion && (
+                    <p className="text-xs text-slate-600 mb-4 line-clamp-2 italic">
+                      {stage.descripcion}
+                    </p>
+                  )}
+
                   {/* Content */}
                   <div className="space-y-3 text-xs">
                     {/* Reintentos */}
-                    <div className="flex items-center justify-between p-2 bg-white rounded-lg">
-                      <span className="text-slate-600">Reintentos:</span>
-                      <span className="font-bold text-slate-900">{stage.intentos_requeridos || 1}</span>
+                    <div className="p-3 bg-slate-100 rounded-lg border border-slate-300">
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className="w-2 h-2 rounded-full bg-slate-600"></div>
+                        <span className="font-bold text-slate-700">Reintentos Máximos:</span>
+                      </div>
+                      <div className="text-slate-900 font-semibold ml-4">
+                        {stage.intentos_requeridos || 1}
+                      </div>
                     </div>
 
                     {/* Success Path */}
@@ -86,16 +98,31 @@ export default function PipelineFlowDiagram({ stages }: PipelineFlowDiagramProps
                       </div>
                     </div>
 
-                    {/* Failure Path */}
-                    <div className="p-3 bg-amber-50 rounded-lg border border-amber-200">
-                      <div className="flex items-center gap-2 mb-1">
-                        <div className="w-2 h-2 rounded-full bg-amber-500"></div>
-                        <span className="font-bold text-amber-700">Falla → Regresar a:</span>
+                    {/* Failure Path - Only show if there's a back stage */}
+                    {backStage && (
+                      <div className="p-3 bg-amber-50 rounded-lg border border-amber-200">
+                        <div className="flex items-center gap-2 mb-1">
+                          <div className="w-2 h-2 rounded-full bg-amber-500"></div>
+                          <span className="font-bold text-amber-700">Falla → Regresar a:</span>
+                        </div>
+                        <div className="text-amber-700 font-semibold ml-4">
+                          {backStage.titulo}
+                        </div>
                       </div>
-                      <div className="text-amber-700 font-semibold ml-4">
-                        {backStage ? backStage.titulo : 'Eliminar lead'}
+                    )}
+
+                    {/* Eliminate Lead - Show only if no back stage */}
+                    {!backStage && (
+                      <div className="p-3 bg-red-50 rounded-lg border border-red-200">
+                        <div className="flex items-center gap-2 mb-1">
+                          <div className="w-2 h-2 rounded-full bg-red-500"></div>
+                          <span className="font-bold text-red-700">Acción por Falla:</span>
+                        </div>
+                        <div className="text-red-700 font-semibold ml-4">
+                          Eliminar lead
+                        </div>
                       </div>
-                    </div>
+                    )}
 
                     {/* Clave */}
                     <div className="text-center text-slate-500 text-xs pt-2 border-t border-slate-200">
