@@ -24,17 +24,14 @@ export default function InitialCampaignModal({
   onCampaignStarted,
 }: InitialCampaignModalProps) {
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
-  const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (!isOpen || !lead) return null;
 
-  const isNotesValid = notes.trim().length >= 10;
-
   const handleContinue = async () => {
-    if (!isNotesValid) {
-      setError('Los comentarios deben tener al menos 10 caracteres');
+    if (!startDate) {
+      setError('Selecciona una fecha de inicio');
       return;
     }
 
@@ -84,7 +81,7 @@ export default function InitialCampaignModal({
           interaction_type: 'task_outcome',
           actor_id: (await supabase.auth.getUser()).data.user?.id,
           action_label: 'Campaña iniciada',
-          message: notes,
+          message: `Campaña iniciada para ${startDate}`,
           metadata: {
             task_id: taskData?.id,
             start_date: startDate,
@@ -94,7 +91,6 @@ export default function InitialCampaignModal({
       if (interactionError) throw interactionError;
 
       // Reset and close
-      setNotes('');
       setStartDate(new Date().toISOString().split('T')[0]);
       onClose();
       onCampaignStarted?.();
@@ -144,37 +140,18 @@ export default function InitialCampaignModal({
 
           {/* Start Date */}
           <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-700">Fecha inicial de trabajo</label>
+            <label className="text-xs font-bold text-slate-700">Fecha de inicio de trabajo</label>
             <input
               type="date"
               value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
+              onChange={(e) => {
+                setStartDate(e.target.value);
+                if (error) setError(null);
+              }}
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
               disabled={isSubmitting}
             />
-          </div>
-
-          {/* Notes */}
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-700">
-              Comentarios
-              {!isNotesValid && notes.length > 0 && (
-                <span className="text-slate-400 font-normal">
-                  {' '}
-                  ({notes.length}/10)
-                </span>
-              )}
-            </label>
-            <textarea
-              value={notes}
-              onChange={(e) => {
-                setNotes(e.target.value);
-                if (error) setError(null);
-              }}
-              placeholder="¿Por qué inicia la campaña para este lead? (mínimo 10 caracteres)"
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 resize-none h-24"
-              disabled={isSubmitting}
-            />
+            <p className="text-xs text-slate-500">Selecciona la fecha en que comenzarás a trabajar este lead</p>
           </div>
 
           {/* Error */}
@@ -197,11 +174,11 @@ export default function InitialCampaignModal({
           </button>
           <button
             onClick={handleContinue}
-            disabled={!isNotesValid || isSubmitting}
+            disabled={!startDate || isSubmitting}
             className="flex-1 px-4 py-2 text-sm font-bold text-white bg-slate-900 rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {isSubmitting && <Loader2 size={14} className="animate-spin" />}
-            Continuar
+            Calendarizar
           </button>
         </div>
       </div>
