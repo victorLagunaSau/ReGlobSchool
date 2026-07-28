@@ -53,6 +53,8 @@ export default function LeadsConfig({ stages, onRefresh }: LeadsConfigProps) {
       tipo: stage.tipo || 'contacto',
       tasa_exito: stage.tasa_exito || 0,
       siguiente_etapa_id: stage.siguiente_etapa_id || null,
+      continuar_a_id: stage.continuar_a_id || null,
+      regresar_a_id: stage.regresar_a_id || null,
     };
   }, [stages, editingStageId]);
 
