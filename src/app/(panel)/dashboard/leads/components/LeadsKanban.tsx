@@ -3,9 +3,10 @@
 import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { supabase } from '../../../../../lib/supabase/client';
-import { Search, MapPin, Phone, Mail, Globe, Maximize2, Calendar, Clock } from 'lucide-react';
+import { Search, MapPin, Phone, Mail, Globe, Maximize2, Calendar, Clock, Play } from 'lucide-react';
 import { scoreStyle } from '../../../../../lib/lead-score';
 import LeadWorkModal from './LeadWorkModal';
+import InitialCampaignModal from './InitialCampaignModal';
 import type { LeadRow, StateRow, PipelineStage, DEFAULT_LEAD_STATUSES } from '../page';
 import { DEFAULT_LEAD_STATUSES as DEFAULTS } from '../page';
 
@@ -38,6 +39,8 @@ export default function LeadsKanban({ leads, states, stages, onRefresh }: LeadsK
   const [dragOverStatus, setDragOverStatus] = useState<string | null>(null);
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [isLeadModalOpen, setIsLeadModalOpen] = useState(false);
+  const [isCampaignModalOpen, setIsCampaignModalOpen] = useState(false);
+  const [campaignLeadId, setCampaignLeadId] = useState<string | null>(null);
   const [schedulingLeadId, setSchedulingLeadId] = useState<string | null>(null);
   const [scheduledDate, setScheduledDate] = useState('');
 
@@ -247,19 +250,44 @@ export default function LeadsKanban({ leads, states, stages, onRefresh }: LeadsK
                     </div>
                   )}
 
-                  {schedulingLeadId !== lead.id && (() => {
+                  {(() => {
                     const leadStage = stages.find(s => s.clave === lead.status);
                     const isFirstStage = leadStage && leadStage.orden === 1;
-                    return isFirstStage && (
-                      <button
-                        onClick={() => setSchedulingLeadId(lead.id)}
-                        className="w-full mt-2 flex items-center justify-center gap-1.5 py-1.5 px-2 text-[10px] font-bold text-slate-600 bg-slate-100/50 hover:bg-slate-100 rounded-lg transition-colors"
-                        title="Calendarizar para activar"
-                      >
-                        <Calendar size={12} />
-                        Calendarizar
-                      </button>
-                    );
+                    const isSecondStage = leadStage && leadStage.orden === 2;
+
+                    if (isFirstStage) {
+                      return (
+                        <button
+                          onClick={() => {
+                            setCampaignLeadId(lead.id);
+                            setIsCampaignModalOpen(true);
+                          }}
+                          className="w-full mt-2 flex items-center justify-center gap-1.5 py-1.5 px-2 text-[10px] font-bold text-white bg-slate-700 hover:bg-slate-800 rounded-lg transition-colors"
+                          title="Iniciar trabajo en el lead"
+                        >
+                          <Play size={11} />
+                          Trabajar
+                        </button>
+                      );
+                    }
+
+                    if (isSecondStage) {
+                      return (
+                        <button
+                          onClick={() => {
+                            setSelectedLeadId(lead.id);
+                            setIsLeadModalOpen(true);
+                          }}
+                          className="w-full mt-2 flex items-center justify-center gap-1.5 py-1.5 px-2 text-[10px] font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-lg transition-colors"
+                          title="Registrar intento de contacto"
+                        >
+                          <Play size={11} />
+                          Trabajar
+                        </button>
+                      );
+                    }
+
+                    return null;
                   })()}
                 </div>
               ))}
@@ -283,6 +311,18 @@ export default function LeadsKanban({ leads, states, stages, onRefresh }: LeadsK
         }}
         onTaskResolved={onRefresh}
       />
+
+      {campaignLeadId && (
+        <InitialCampaignModal
+          isOpen={isCampaignModalOpen}
+          lead={campaignLeadId ? leads.find(l => l.id === campaignLeadId) || null : null}
+          onClose={() => {
+            setIsCampaignModalOpen(false);
+            setCampaignLeadId(null);
+          }}
+          onCampaignStarted={onRefresh}
+        />
+      )}
     </div>
   );
 }
