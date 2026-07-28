@@ -22,7 +22,7 @@ interface ContactAttemptModalProps {
     country_name: string | null;
     created_at: string;
   } | null;
-  stages: Array<{ id: string; clave: string; titulo: string; orden: number }>;
+  stages: Array<{ id: string; clave: string; titulo: string; orden: number; siguiente_etapa_id?: string | null }>;
   onClose: () => void;
   onTaskResolved?: () => void;
 }
@@ -184,10 +184,15 @@ export default function ContactAttemptModal({
         return;
       }
 
-      // Get next stage (negociacion)
-      const nextStage = stages.find(s => s.orden === 3);
+      // Get current stage to find next stage via siguiente_etapa_id
+      const currentStage = stages[0]; // Current stage is passed in stages array
+      const nextStageId = currentStage?.siguiente_etapa_id;
+      const nextStage = nextStageId
+        ? stages.find(s => s.id === nextStageId)
+        : stages.find(s => s.orden === (currentStage?.orden || 2) + 1);
+
       if (!nextStage) {
-        throw new Error('No se encontró la etapa de Negociación');
+        throw new Error('No se encontró la siguiente etapa en el pipeline');
       }
 
       await saveAttemptNote('success');
