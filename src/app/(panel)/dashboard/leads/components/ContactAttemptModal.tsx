@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Phone, Mail, MapPin, AlertCircle, Loader2, ChevronDown, CheckCircle2, RotateCcw, Trash2, Calendar } from 'lucide-react';
 import { supabase } from '../../../../../lib/supabase/client';
 import { resolveTaskWithPipeline } from '../../../../../lib/task-automation';
+import DecisionMakersForm from './DecisionMakersForm';
 
 interface ContactAttemptModalProps {
   isOpen: boolean;
@@ -55,8 +56,6 @@ export default function ContactAttemptModal({
   const [emailAttempted, setEmailAttempted] = useState(false);
   const [selectedOutcome, setSelectedOutcome] = useState<'exito' | 'reintentar' | 'descartar' | null>(null);
   const [note, setNote] = useState('');
-  const [decisionMakers, setDecisionMakers] = useState<string[]>([]);
-  const [newDecisionMaker, setNewDecisionMaker] = useState('');
 
   // Success flow state
   const [scheduledDate, setScheduledDate] = useState('');
@@ -806,54 +805,9 @@ export default function ContactAttemptModal({
               Notas & Decisiones
             </h3>
 
-            {/* Decision Makers Section */}
+            {/* Decision Makers Component */}
             <div className="mb-4 pb-4 border-b border-slate-200">
-              <label className="block text-xs font-bold text-slate-700 mb-2">
-                Tomadores de Decisiones
-              </label>
-              <div className="flex gap-1 mb-2">
-                <input
-                  type="text"
-                  value={newDecisionMaker}
-                  onChange={(e) => setNewDecisionMaker(e.target.value)}
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter' && newDecisionMaker.trim()) {
-                      setDecisionMakers([...decisionMakers, newDecisionMaker.trim()]);
-                      setNewDecisionMaker('');
-                    }
-                  }}
-                  placeholder="Nombre del contacto"
-                  className="flex-1 px-2 py-1 border border-slate-300 rounded text-xs"
-                  disabled={isSubmitting}
-                />
-                <button
-                  onClick={() => {
-                    if (newDecisionMaker.trim()) {
-                      setDecisionMakers([...decisionMakers, newDecisionMaker.trim()]);
-                      setNewDecisionMaker('');
-                    }
-                  }}
-                  disabled={isSubmitting || !newDecisionMaker.trim()}
-                  className="px-2 py-1 bg-slate-700 text-white text-xs font-bold rounded hover:bg-slate-800 disabled:opacity-50"
-                >
-                  +
-                </button>
-              </div>
-              {decisionMakers.length > 0 && (
-                <div className="space-y-1">
-                  {decisionMakers.map((dm, idx) => (
-                    <div key={idx} className="flex items-center justify-between bg-white rounded px-2 py-1 text-xs">
-                      <span className="text-slate-700">{dm}</span>
-                      <button
-                        onClick={() => setDecisionMakers(decisionMakers.filter((_, i) => i !== idx))}
-                        className="text-slate-400 hover:text-red-600 font-bold"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
+              {leadId && <DecisionMakersForm leadId={leadId} />}
             </div>
 
             {/* Notes Input */}

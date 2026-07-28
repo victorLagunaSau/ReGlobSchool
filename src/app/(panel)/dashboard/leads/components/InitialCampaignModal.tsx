@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { X, Loader2, AlertCircle } from 'lucide-react';
 import { supabase } from '../../../../../lib/supabase/client';
+import DecisionMakersForm from './DecisionMakersForm';
 
 interface InitialCampaignModalProps {
   isOpen: boolean;
@@ -136,6 +137,11 @@ export default function InitialCampaignModal({
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Decision Makers */}
+          <div className="space-y-2">
+            {lead && <DecisionMakersForm leadId={lead.id} readOnly={false} />}
           </div>
 
           {/* Start Date */}
