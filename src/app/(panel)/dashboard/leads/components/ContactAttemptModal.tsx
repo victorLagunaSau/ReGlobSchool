@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Phone, Mail, MapPin, AlertCircle, Loader2, ChevronDown, CheckCircle2, RotateCcw, Trash2, Calendar } from 'lucide-react';
 import { supabase } from '../../../../../lib/supabase/client';
 import { resolveTaskWithPipeline } from '../../../../../lib/task-automation';
+import DecisionMakersForm from './DecisionMakersForm';
 
 interface ContactAttemptModalProps {
   isOpen: boolean;
@@ -191,6 +192,26 @@ export default function ContactAttemptModal({
 
       await saveAttemptNote('success');
 
+      // Log interaction with decision makers
+      await supabase
+        .from('lead_interactions')
+        .insert({
+          lead_id: currentTask.lead_id,
+          interaction_type: 'task_outcome',
+          actor_id: (await supabase.auth.getUser()).data.user?.id,
+          action_label: 'Contacto exitoso',
+          message: note.trim(),
+          metadata: {
+            contact_methods: {
+              llamada: callAttempted,
+              email: emailAttempted,
+            },
+            decision_makers: decisionMakers,
+            scheduled_date: scheduledDate,
+            modality: modality,
+          },
+        });
+
       await resolveTaskWithPipeline(
         {
           id: currentTask.id,
@@ -300,7 +321,7 @@ export default function ContactAttemptModal({
 
   return (
     <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="bg-white rounded-2xl shadow-xl max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="bg-slate-900 text-white p-6 border-b border-slate-800 space-y-3">
           <div className="flex items-start justify-between">
@@ -380,9 +401,11 @@ export default function ContactAttemptModal({
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {/* Progress bar */}
-          <div className="w-full bg-slate-200 rounded-full h-2">
+        <div className="flex-1 overflow-hidden flex">
+          {/* Left Panel: Actions */}
+          <div className="flex-1 overflow-y-auto p-6 space-y-6 border-r border-slate-200">
+            {/* Progress bar */}
+            <div className="w-full bg-slate-200 rounded-full h-2">
             <div
               className="bg-blue-600 h-2 rounded-full transition-all"
               style={{ width: `${(attemptNumber / maxAttempts) * 100}%` }}
@@ -493,7 +516,15 @@ export default function ContactAttemptModal({
 
               {/* Action Buttons */}
               <div className="space-y-3 bg-slate-50 p-4 rounded-lg border border-slate-200">
-                <p className="text-xs font-bold text-slate-600 uppercase">Acciones de Contacto</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-bold text-slate-600 uppercase">Acciones de Contacto</p>
+                  {(callAttempted || emailAttempted) && (
+                    <div className="flex gap-1 text-xs">
+                      {callAttempted && <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded font-bold flex items-center gap-1"><Phone size={10} />✓</span>}
+                      {emailAttempted && <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded font-bold flex items-center gap-1"><Mail size={10} />✓</span>}
+                    </div>
+                  )}
+                </div>
                 <div className="space-y-3">
                   {lead.phone && (
                     <div>
@@ -507,12 +538,12 @@ export default function ContactAttemptModal({
                         disabled={isSubmitting}
                         className={`w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg font-semibold text-sm transition-all ${
                           callAttempted
-                            ? 'bg-emerald-100 border border-emerald-300 text-emerald-900'
+                            ? 'bg-emerald-100 border-2 border-emerald-400 text-emerald-900'
                             : 'bg-slate-100 border border-slate-200 text-slate-700 hover:bg-slate-200'
                         } disabled:opacity-50`}
                       >
                         <Phone size={16} />
-                        {callAttempted ? 'Llamada Realizada' : 'Registrar Llamada'}
+                        {callAttempted ? '✓ Llamada Realizada' : 'Registrar Llamada'}
                       </button>
                     </div>
                   )}
@@ -528,12 +559,12 @@ export default function ContactAttemptModal({
                         disabled={isSubmitting}
                         className={`w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg font-semibold text-sm transition-all ${
                           emailAttempted
-                            ? 'bg-emerald-100 border border-emerald-300 text-emerald-900'
+                            ? 'bg-emerald-100 border-2 border-emerald-400 text-emerald-900'
                             : 'bg-slate-100 border border-slate-200 text-slate-700 hover:bg-slate-200'
                         } disabled:opacity-50`}
                       >
                         <Mail size={16} />
-                        {emailAttempted ? 'Email Enviado' : 'Registrar Email'}
+                        {emailAttempted ? '✓ Email Enviado' : 'Registrar Email'}
                       </button>
                     </div>
                   )}
@@ -647,23 +678,6 @@ export default function ContactAttemptModal({
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-bold text-emerald-900 mb-2">
-                      Nota <span className="text-red-500">*</span>
-                    </label>
-                    <textarea
-                      value={note}
-                      onChange={(e) => setNote(e.target.value)}
-                      disabled={isSubmitting}
-                      placeholder="Describe qué sucedió y por qué avanzas al siguiente paso..."
-                      maxLength={500}
-                      rows={3}
-                      className="w-full px-3 py-2 border border-emerald-300 rounded-lg text-sm resize-none focus:outline-emerald-600 disabled:opacity-60"
-                    />
-                    <p className="text-xs text-emerald-700 mt-1">
-                      {note.length}/500 (mínimo 10)
-                    </p>
-                  </div>
 
                   <div className="flex gap-2 pt-2">
                     <button
@@ -709,23 +723,6 @@ export default function ContactAttemptModal({
                     </button>
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-bold text-slate-900 mb-2">
-                      Explicación <span className="text-red-500">*</span>
-                    </label>
-                    <textarea
-                      value={note}
-                      onChange={(e) => setNote(e.target.value)}
-                      disabled={isSubmitting}
-                      placeholder="¿Por qué fracasó este intento? ¿Qué necesita para el próximo?"
-                      maxLength={500}
-                      rows={3}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm resize-none focus:outline-slate-400 disabled:opacity-60"
-                    />
-                    <p className="text-xs text-slate-600 mt-1">
-                      {note.length}/500 (mínimo 10)
-                    </p>
-                  </div>
 
                   <div className="flex gap-2 pt-2">
                     <button
@@ -773,24 +770,6 @@ export default function ContactAttemptModal({
                     Esta acción moverá el lead a estado "Descartado". No se puede deshacer.
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-bold text-red-900 mb-2">
-                      Motivo del Descarte <span className="text-red-500">*</span>
-                    </label>
-                    <textarea
-                      value={note}
-                      onChange={(e) => setNote(e.target.value)}
-                      disabled={isSubmitting}
-                      placeholder="¿Por qué no continuar con este lead? (Ej: no tiene presupuesto, no está interesado, información incompleta)"
-                      maxLength={500}
-                      rows={3}
-                      className="w-full px-3 py-2 border border-red-300 rounded-lg text-sm resize-none focus:outline-red-600 disabled:opacity-60"
-                    />
-                    <p className="text-xs text-red-700 mt-1">
-                      {note.length}/500 (mínimo 10)
-                    </p>
-                  </div>
-
                   <div className="flex gap-2 pt-2">
                     <button
                       type="button"
@@ -816,29 +795,64 @@ export default function ContactAttemptModal({
                 </div>
               )}
 
-              {/* Attempt Notes History */}
-              {attemptNotes.length > 0 && (
-                <div className="mt-6 pt-6 border-t border-slate-200">
-                  <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 mb-3">
-                    Historial de Notas
-                  </h3>
-                  <div className="space-y-3 max-h-64 overflow-y-auto">
-                    {attemptNotes.map((note) => (
-                      <div key={note.id} className="bg-slate-50 rounded-lg p-3 border border-slate-200">
-                        <p className="text-xs font-bold text-slate-800 mb-1">
-                          {note.stage_titulo} • Intento {note.attempt_number}
-                        </p>
-                        <p className="text-xs text-slate-700">{note.note_text}</p>
-                        <p className="text-[10px] text-slate-400 mt-1">
-                          {new Date(note.created_at).toLocaleString('es-MX')}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </>
           )}
+          </div>
+
+          {/* Right Panel: Notes & History */}
+          <div className="w-80 bg-slate-50 p-4 flex flex-col border-l border-slate-200 overflow-hidden">
+            <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 mb-3">
+              Notas & Decisiones
+            </h3>
+
+            {/* Decision Makers Component */}
+            <div className="mb-4 pb-4 border-b border-slate-200">
+              {leadId && <DecisionMakersForm leadId={leadId} />}
+            </div>
+
+            {/* Notes Input */}
+            {selectedOutcome && (
+              <div className="mb-4 pb-4 border-b border-slate-200">
+                <label className="block text-xs font-bold text-slate-700 mb-2">
+                  Comentarios <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  disabled={isSubmitting}
+                  placeholder="Describe lo que sucedió..."
+                  maxLength={500}
+                  rows={3}
+                  className="w-full px-2 py-1.5 border border-slate-300 rounded-lg text-xs resize-none focus:outline-slate-400 disabled:opacity-60"
+                />
+                <p className="text-[10px] text-slate-600 mt-1">
+                  {note.length}/500 (mínimo 10)
+                </p>
+              </div>
+            )}
+
+            {/* Attempt History */}
+            <div className="flex-1 overflow-y-auto">
+              <h4 className="text-xs font-bold text-slate-600 mb-2">Intentos Previos</h4>
+              {attemptNotes.length === 0 ? (
+                <p className="text-xs text-slate-400 text-center py-4">Sin intentos previos</p>
+              ) : (
+                <div className="space-y-2">
+                  {attemptNotes.map((note) => (
+                    <div key={note.id} className="bg-white rounded-lg p-2 border border-slate-200">
+                      <p className="text-[10px] font-bold text-slate-800">
+                        Intento {note.attempt_number}
+                      </p>
+                      <p className="text-[10px] text-slate-700 mt-1">{note.note_text}</p>
+                      <p className="text-[9px] text-slate-400 mt-1">
+                        {new Date(note.created_at).toLocaleDateString('es-MX')}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>

@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, Phone, Mail, MapPin, AlertCircle, Loader2 } from 'lucide-react';
+import { X, Phone, Mail, MapPin, AlertCircle, Loader2, CheckCircle2, RotateCcw, Trash2 } from 'lucide-react';
 import { supabase } from '../../../../../lib/supabase/client';
 import LeadTaskList, { type LeadTaskRow } from './LeadTaskList';
+import ContactAttemptModal from './ContactAttemptModal';
 
 interface LeadWorkModalProps {
   isOpen: boolean;
@@ -59,6 +60,8 @@ export default function LeadWorkModal({ isOpen, leadId, onClose, onTaskResolved 
   const [interactions, setInteractions] = useState<InteractionRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showContactModal, setShowContactModal] = useState(false);
+  const [stages, setStages] = useState<any[]>([]);
 
   useEffect(() => {
     if (!isOpen || !leadId) {
@@ -72,7 +75,7 @@ export default function LeadWorkModal({ isOpen, leadId, onClose, onTaskResolved 
       setLoading(true);
       setError(null);
       try {
-        const [leadRes, tasksRes, interactionsRes] = await Promise.all([
+        const [leadRes, tasksRes, interactionsRes, stagesRes] = await Promise.all([
           supabase
             .from('leads')
             .select('id, business_name, phone, email, status, score_percent')
@@ -89,6 +92,10 @@ export default function LeadWorkModal({ isOpen, leadId, onClose, onTaskResolved 
             .eq('lead_id', leadId)
             .order('created_at', { ascending: false })
             .limit(10),
+          supabase
+            .from('pipeline_stages')
+            .select('*')
+            .order('orden', { ascending: true }),
         ]);
 
         if (leadRes.error) throw leadRes.error;
@@ -103,6 +110,8 @@ export default function LeadWorkModal({ isOpen, leadId, onClose, onTaskResolved 
           }));
           setInteractions(mapped);
         }
+
+        if (stagesRes.data) setStages(stagesRes.data);
       } catch (err) {
         console.error('Error fetching lead data:', err);
         setError('No se pudo cargar la información del lead');
@@ -177,6 +186,39 @@ export default function LeadWorkModal({ isOpen, leadId, onClose, onTaskResolved 
                   </div>
                 </div>
 
+                {/* Contact Actions Section */}
+                <div className="space-y-2 mb-4">
+                  <h3 className="text-xs font-black uppercase tracking-wider text-slate-700">
+                    Acciones de Contacto
+                  </h3>
+                  <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-lg p-3 border border-amber-200 space-y-2">
+                    {lead.phone && (
+                      <button
+                        className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-white border border-amber-300 text-amber-900 rounded-lg hover:bg-amber-50 transition-all font-semibold text-xs"
+                        title={lead.phone}
+                      >
+                        <Phone size={14} />
+                        Llamar: {lead.phone}
+                      </button>
+                    )}
+                    {lead.email && (
+                      <button
+                        className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-white border border-amber-300 text-amber-900 rounded-lg hover:bg-amber-50 transition-all font-semibold text-xs"
+                        title={lead.email}
+                      >
+                        <Mail size={14} />
+                        Email: {lead.email}
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setShowContactModal(true)}
+                      className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-all font-bold text-xs mt-2"
+                    >
+                      Registrar Intento de Contacto
+                    </button>
+                  </div>
+                </div>
+
                 {/* Tasks Section */}
                 <div className="space-y-2">
                   <h3 className="text-xs font-black uppercase tracking-wider text-slate-700">
@@ -245,6 +287,21 @@ export default function LeadWorkModal({ isOpen, leadId, onClose, onTaskResolved 
           </div>
         </div>
       </div>
+
+      {/* Contact Attempt Modal */}
+      {lead && (
+        <ContactAttemptModal
+          isOpen={showContactModal}
+          leadId={lead.id}
+          lead={lead as any}
+          stages={stages}
+          onClose={() => setShowContactModal(false)}
+          onTaskResolved={() => {
+            setShowContactModal(false);
+            onTaskResolved?.();
+          }}
+        />
+      )}
     </div>
   );
 }
