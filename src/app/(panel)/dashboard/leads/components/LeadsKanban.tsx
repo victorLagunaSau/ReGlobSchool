@@ -263,10 +263,10 @@ export default function LeadsKanban({ leads, states, stages, onRefresh }: LeadsK
                             setIsCampaignModalOpen(true);
                           }}
                           className="w-full mt-2 flex items-center justify-center gap-1.5 py-1.5 px-2 text-[10px] font-bold text-white bg-slate-700 hover:bg-slate-800 rounded-lg transition-colors"
-                          title="Iniciar trabajo en el lead"
+                          title="Calendarizar inicio de campaña"
                         >
-                          <Play size={11} />
-                          Trabajar
+                          <Calendar size={11} />
+                          Calendarizar
                         </button>
                       );
                     }
