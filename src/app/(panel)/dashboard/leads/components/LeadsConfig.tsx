@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { supabase } from '@/src/lib/supabase/client';
-import { Trash2, Plus, ChevronDown, ChevronUp, Edit2 } from 'lucide-react';
+import { Trash2, Plus, ChevronDown, ChevronUp, Edit2, Info } from 'lucide-react';
 import ModalPipelineStage, { PipelineStageFormData } from './ModalPipelineStage';
 import PipelineFlowDiagram from './PipelineFlowDiagram';
 
@@ -207,7 +207,15 @@ export default function LeadsConfig({ stages, onRefresh }: LeadsConfigProps) {
                   Descripción
                 </th>
                 <th className="px-6 py-4 text-center font-bold text-slate-700">
-                  Límites
+                  <div className="flex items-center justify-center gap-2">
+                    <span>LP/IM</span>
+                    <div className="group relative cursor-help">
+                      <Info size={14} className="text-slate-500 hover:text-slate-700" />
+                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-900 text-white text-xs rounded whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-10">
+                        Límite Pospuestas / Intentos Máximos
+                      </div>
+                    </div>
+                  </div>
                 </th>
                 <th className="px-6 py-4 text-center font-bold text-slate-700">
                   Tipo
@@ -244,19 +252,8 @@ export default function LeadsConfig({ stages, onRefresh }: LeadsConfigProps) {
                       {stage.descripcion || '—'}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-center">
-                    <div className="space-y-1 text-xs">
-                      <div className={`inline-block px-2 py-1 rounded text-xs font-bold ${
-                        stage.limite_pospuestas === 0
-                          ? 'bg-red-100 text-red-700'
-                          : 'bg-amber-100 text-amber-700'
-                      }`}>
-                        Pos: {stage.limite_pospuestas}
-                      </div>
-                      <div className="font-bold text-slate-900">
-                        Int: {stage.intentos_requeridos}
-                      </div>
-                    </div>
+                  <td className="px-6 py-4 text-center font-bold text-slate-900">
+                    {stage.limite_pospuestas} / {stage.intentos_requeridos}
                   </td>
                   <td className="px-6 py-4 text-center">
                     <span className={`inline-block px-3 py-1 rounded-lg text-xs font-bold ${
