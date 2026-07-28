@@ -402,52 +402,66 @@ export default function ModalPipelineStage({
             <div className="grid grid-cols-2 gap-4">
               {/* Si Falla - Izquierda */}
               <div>
-                <label className="flex items-center gap-2 text-xs font-bold mb-2">
-                  <div className="w-3 h-3 rounded bg-yellow-400"></div>
-                  Si Falla → Regresar a:
-                </label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="flex items-center gap-2 text-xs font-bold">
+                    <div className="w-3 h-3 rounded bg-yellow-400"></div>
+                    Si Falla → Regresar a:
+                  </label>
+                  {formData.regresar_a_id && (
+                    <span className="text-xs font-bold text-yellow-700 bg-yellow-100 px-2 py-1 rounded">
+                      {allStages.find(s => s.id === formData.regresar_a_id)?.titulo || 'Configurado'}
+                    </span>
+                  )}
+                  {!formData.regresar_a_id && (
+                    <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded">
+                      Sin configurar
+                    </span>
+                  )}
+                </div>
                 <select
                   value={formData.regresar_a_id || ''}
                   onChange={e => handleChange('regresar_a_id', e.target.value || null)}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs bg-white"
+                  className="w-full px-3 py-2 border-2 border-slate-200 rounded-lg text-xs bg-white font-semibold hover:border-yellow-300 focus:border-yellow-400 focus:outline-none"
                 >
                   <option value="">-- Sin retroceso (Eliminar) --</option>
-                  {allStages.map(s => (
+                  {allStages.filter(s => s.id !== stage?.id).map(s => (
                     <option key={s.id} value={s.id}>
                       {s.titulo}
                     </option>
                   ))}
                 </select>
-                {formData.regresar_a_id && (
-                  <div className="mt-2 text-xs text-yellow-700 bg-yellow-50 p-2 rounded">
-                    ✓ {allStages.find(s => s.id === formData.regresar_a_id)?.titulo}
-                  </div>
-                )}
               </div>
 
               {/* Si Éxito - Derecha */}
               <div>
-                <label className="flex items-center gap-2 text-xs font-bold mb-2">
-                  <div className="w-3 h-3 rounded bg-green-500"></div>
-                  Éxito → Continuar a:
-                </label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="flex items-center gap-2 text-xs font-bold">
+                    <div className="w-3 h-3 rounded bg-green-500"></div>
+                    Éxito → Continuar a:
+                  </label>
+                  {formData.continuar_a_id && (
+                    <span className="text-xs font-bold text-green-700 bg-green-100 px-2 py-1 rounded">
+                      {allStages.find(s => s.id === formData.continuar_a_id)?.titulo || 'Configurado'}
+                    </span>
+                  )}
+                  {!formData.continuar_a_id && (
+                    <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded">
+                      Sin configurar
+                    </span>
+                  )}
+                </div>
                 <select
                   value={formData.continuar_a_id || ''}
                   onChange={e => handleChange('continuar_a_id', e.target.value || null)}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs bg-white"
+                  className="w-full px-3 py-2 border-2 border-slate-200 rounded-lg text-xs bg-white font-semibold hover:border-green-300 focus:border-green-400 focus:outline-none"
                 >
                   <option value="">-- Sin siguiente (Terminal) --</option>
-                  {allStages.map(s => (
+                  {allStages.filter(s => s.id !== stage?.id).map(s => (
                     <option key={s.id} value={s.id}>
                       {s.titulo}
                     </option>
                   ))}
                 </select>
-                {formData.continuar_a_id && (
-                  <div className="mt-2 text-xs text-green-700 bg-green-50 p-2 rounded">
-                    ✓ {allStages.find(s => s.id === formData.continuar_a_id)?.titulo}
-                  </div>
-                )}
               </div>
             </div>
           </div>
