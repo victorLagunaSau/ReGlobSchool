@@ -156,6 +156,9 @@ export default function ModalPipelineStage({
         orden: 0,
         limite_pospuestas: 3,
         intentos_requeridos: 1,
+        tipo: 'contacto',
+        tasa_exito: 0,
+        siguiente_etapa_id: null,
       });
     } catch (error) {
       console.error('Error confirming stage:', error);
