@@ -19,7 +19,13 @@ There is no test runner configured in this repo.
 
 Next.js 16 (App Router) + React 19 + TypeScript, Tailwind CSS v4 (config-file based, not CSS-first), Supabase (Auth + Postgres, via `@supabase/ssr` + `@supabase/supabase-js`) as the only backend, `react-simple-maps` for choropleth maps, `lucide-react` for icons.
 
-**Read `node_modules/next/dist/docs/` before writing Next.js-specific code** (routing, data fetching, middleware, config) — this Next.js version has breaking changes versus older/training-data conventions.
+**CRITICAL: Read `node_modules/next/dist/docs/` before writing Next.js-specific code** (routing, data fetching, middleware, config) — this Next.js version has breaking changes versus older/training-data conventions.
+
+**Next.js 16 Breaking Change — Dynamic Route Params:**
+- `params` in route handlers, pages, and layouts are **always `Promise<{ id: string }>`** now
+- Old pattern: `{ params }: { params: { id: string } }`
+- New pattern: `{ params }: { params: Promise<{ id: string }> }` + `const { id } = await params;`
+- Forgetting this causes TypeScript build failures. See `src/app/api/leads/[id]/resolve-task/route.ts` for example.
 
 ## Architecture
 
@@ -53,6 +59,20 @@ No backend/API routes — pages talk to Postgres directly from client components
 ### Import aliases
 
 `tsconfig.json` maps `@/*` to the **project root**, not `src/`. Existing code is inconsistent: some files use `@/src/lib/supabase/client`, others use relative paths (`'../../../lib/supabase/client'`). Prefer the `@/src/...` form for new code since it isn't dependent on nesting depth.
+
+## SQL Migrations
+
+Migrations live in `supabase/migrations/`. When changing CHECK constraints:
+1. **DROP the old constraint first**
+2. Then INSERT/UPDATE with new values
+3. Then ADD the new constraint
+
+Reversing this order causes inserts to fail. Example: changing `status IN ('prospecto', 'contacto')` to include `'demo'`:
+```sql
+ALTER TABLE leads DROP CONSTRAINT status_check;
+-- now insert demo values
+ALTER TABLE leads ADD CONSTRAINT status_check CHECK (status IN ('prospecto', 'contacto', 'demo'));
+```
 
 ## Notes
 
