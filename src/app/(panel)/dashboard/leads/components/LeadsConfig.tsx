@@ -122,12 +122,15 @@ export default function LeadsConfig({ stages, onRefresh }: LeadsConfigProps) {
         .delete()
         .eq('id', id);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase error:', error);
+        throw new Error(error.message || 'Error desconocido al eliminar');
+      }
       setDeleteConfirmId(null);
       onRefresh();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting stage:', error);
-      alert('Error al eliminar la etapa');
+      alert(`Error al eliminar la etapa: ${error.message || 'Desconocido'}`);
     } finally {
       setIsLoading(false);
     }
