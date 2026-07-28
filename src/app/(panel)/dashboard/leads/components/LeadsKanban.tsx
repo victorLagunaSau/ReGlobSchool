@@ -136,11 +136,8 @@ export default function LeadsKanban({ leads, states, stages, onRefresh }: LeadsK
                         {lead.business_name}
                       </Link>
                       <button
-                        onClick={() => {
-                          setSelectedLeadId(lead.id);
-                          setIsLeadModalOpen(true);
-                        }}
-                        className="p-0.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded transition-all flex-shrink-0 mt-0.5"
+                        disabled
+                        className="p-0.5 text-slate-300 hover:text-slate-300 rounded flex-shrink-0 mt-0.5"
                         title="Ver detalles"
                       >
                         <Maximize2 size={14} />

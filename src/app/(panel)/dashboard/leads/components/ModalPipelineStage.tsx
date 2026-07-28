@@ -11,6 +11,9 @@ export interface PipelineStageFormData {
   orden: number;
   limite_pospuestas: number;
   intentos_requeridos: number;
+  tipo?: string;
+  tasa_exito?: number;
+  siguiente_etapa_id?: string | null;
 }
 
 interface ModalPipelineStageProp {
@@ -41,6 +44,9 @@ export default function ModalPipelineStage({
         orden: stage.orden || 0,
         limite_pospuestas: stage.limite_pospuestas || 3,
         intentos_requeridos: stage.intentos_requeridos || 1,
+        tipo: stage.tipo || 'contacto',
+        tasa_exito: stage.tasa_exito || 0,
+        siguiente_etapa_id: stage.siguiente_etapa_id || null,
       };
     }
     return {
@@ -51,6 +57,9 @@ export default function ModalPipelineStage({
       orden: 0,
       limite_pospuestas: 3,
       intentos_requeridos: 1,
+      tipo: 'contacto',
+      tasa_exito: 0,
+      siguiente_etapa_id: null,
     };
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -66,6 +75,9 @@ export default function ModalPipelineStage({
         orden: stage.orden || 0,
         limite_pospuestas: stage.limite_pospuestas || 3,
         intentos_requeridos: stage.intentos_requeridos || 1,
+        tipo: stage.tipo || 'contacto',
+        tasa_exito: stage.tasa_exito || 0,
+        siguiente_etapa_id: stage.siguiente_etapa_id || null,
       });
     } else {
       setFormData({
@@ -76,6 +88,9 @@ export default function ModalPipelineStage({
         orden: 0,
         limite_pospuestas: 3,
         intentos_requeridos: 1,
+        tipo: 'contacto',
+        tasa_exito: 0,
+        siguiente_etapa_id: null,
       });
     }
     setStep('form');
@@ -318,6 +333,39 @@ export default function ModalPipelineStage({
               {errors.intentos_requeridos && (
                 <p className="text-xs text-red-500 mt-1">{errors.intentos_requeridos}</p>
               )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-2">
+                Tipo de Etapa
+              </label>
+              <select
+                value={formData.tipo || 'contacto'}
+                onChange={e => handleChange('tipo', e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs"
+              >
+                <option value="inicial">Inicial</option>
+                <option value="contacto">Contacto</option>
+                <option value="reunion">Reunión</option>
+                <option value="reagendar">Reagendar</option>
+                <option value="cierre">Cierre</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-2">
+                Tasa de Éxito (%)
+              </label>
+              <input
+                type="number"
+                value={formData.tasa_exito || 0}
+                onChange={e => handleChange('tasa_exito', parseInt(e.target.value) || 0)}
+                min="0"
+                max="100"
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs"
+              />
             </div>
           </div>
         </div>

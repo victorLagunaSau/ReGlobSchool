@@ -14,6 +14,9 @@ export interface PipelineStage {
   orden: number;
   limite_pospuestas: number;
   intentos_requeridos: number;
+  tipo?: string;
+  tasa_exito?: number;
+  siguiente_etapa_id?: string | null;
 }
 
 interface LeadsConfigProps {
@@ -44,6 +47,9 @@ export default function LeadsConfig({ stages, onRefresh }: LeadsConfigProps) {
       orden: stage.orden,
       limite_pospuestas: stage.limite_pospuestas,
       intentos_requeridos: stage.intentos_requeridos,
+      tipo: stage.tipo || 'contacto',
+      tasa_exito: stage.tasa_exito || 0,
+      siguiente_etapa_id: stage.siguiente_etapa_id || null,
     };
   }, [stages, editingStageId]);
 
@@ -189,6 +195,12 @@ export default function LeadsConfig({ stages, onRefresh }: LeadsConfigProps) {
               <th className="px-4 py-3 text-left font-bold text-slate-700">
                 Intentos Req.
               </th>
+              <th className="px-4 py-3 text-left font-bold text-slate-700">
+                Tipo
+              </th>
+              <th className="px-4 py-3 text-left font-bold text-slate-700">
+                Tasa Éxito
+              </th>
               <th className="px-4 py-3 text-center font-bold text-slate-700">
                 Acciones
               </th>
@@ -225,6 +237,22 @@ export default function LeadsConfig({ stages, onRefresh }: LeadsConfigProps) {
                 </td>
                 <td className="px-4 py-3 text-center font-bold">
                   {stage.intentos_requeridos}
+                </td>
+                <td className="px-4 py-3">
+                  <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${
+                    stage.tipo === 'inicial' ? 'bg-slate-100 text-slate-700' :
+                    stage.tipo === 'contacto' ? 'bg-amber-50 text-amber-700' :
+                    stage.tipo === 'reunion' ? 'bg-blue-50 text-blue-700' :
+                    stage.tipo === 'cierre' ? 'bg-emerald-50 text-emerald-700' :
+                    'bg-purple-50 text-purple-700'
+                  }`}>
+                    {stage.tipo || 'contacto'}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-center font-bold">
+                  <span className="inline-block px-2 py-1 rounded text-xs font-bold bg-indigo-50 text-indigo-700">
+                    {stage.tasa_exito || 0}%
+                  </span>
                 </td>
                 <td className="px-4 py-3 text-center">
                   <div className="flex justify-center gap-2">
