@@ -5,8 +5,7 @@ import Link from 'next/link';
 import { supabase } from '../../../../../lib/supabase/client';
 import { Search, MapPin, Phone, Mail, Globe, Maximize2, Calendar } from 'lucide-react';
 import { scoreStyle } from '../../../../../lib/lead-score';
-import InitialCampaignModal from './InitialCampaignModal';
-import ContactAttemptModal from './ContactAttemptModal';
+import StageModalRouter from './StageModalRouter';
 import type { LeadRow, StateRow, PipelineStage, DEFAULT_LEAD_STATUSES } from '../page';
 import { DEFAULT_LEAD_STATUSES as DEFAULTS } from '../page';
 
@@ -37,10 +36,9 @@ export default function LeadsKanban({ leads, states, stages, onRefresh }: LeadsK
   const [filterState, setFilterState] = useState('');
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dragOverStatus, setDragOverStatus] = useState<string | null>(null);
-  const [isCampaignModalOpen, setIsCampaignModalOpen] = useState(false);
-  const [campaignLeadId, setCampaignLeadId] = useState<string | null>(null);
-  const [isContactModalOpen, setIsContactModalOpen] = useState(false);
-  const [contactLeadId, setContactLeadId] = useState<string | null>(null);
+  const [isStageModalOpen, setIsStageModalOpen] = useState(false);
+  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+  const [selectedStageType, setSelectedStageType] = useState<string | null>(null);
 
   const filteredLeads = useMemo(() => {
     return leads.filter((l) => {
@@ -172,42 +170,52 @@ export default function LeadsKanban({ leads, states, stages, onRefresh }: LeadsK
 
                   {(() => {
                     const leadStage = stages.find(s => s.clave === lead.status);
-                    const isFirstStage = leadStage && leadStage.orden === 1;
-                    const isSecondStage = leadStage && leadStage.orden === 2;
+                    if (!leadStage) return null;
 
-                    if (isFirstStage) {
-                      return (
-                        <button
-                          onClick={() => {
-                            setCampaignLeadId(lead.id);
-                            setIsCampaignModalOpen(true);
-                          }}
-                          className="w-full mt-2 flex items-center justify-center gap-1.5 py-1.5 px-2 text-[10px] font-bold text-white bg-slate-700 hover:bg-slate-800 rounded-lg transition-colors"
-                          title="Calendarizar inicio de campaña"
-                        >
-                          <Calendar size={11} />
-                          Calendarizar
-                        </button>
-                      );
-                    }
+                    const buttonConfig: Record<string, { label: string; icon: React.ReactNode; bgColor: string; title: string }> = {
+                      inicial: {
+                        label: 'Calendarizar',
+                        icon: <Calendar size={11} />,
+                        bgColor: 'bg-slate-700 hover:bg-slate-800',
+                        title: 'Calendarizar inicio de campaña',
+                      },
+                      contacto: {
+                        label: 'Trabajar',
+                        icon: <Mail size={11} />,
+                        bgColor: 'bg-amber-600 hover:bg-amber-700',
+                        title: 'Registrar intento de contacto',
+                      },
+                      reunion: {
+                        label: 'Calendarizar',
+                        icon: <Calendar size={11} />,
+                        bgColor: 'bg-blue-600 hover:bg-blue-700',
+                        title: 'Calendarizar reunión de demostración',
+                      },
+                      reagendar: {
+                        label: 'Reagendar',
+                        icon: <Calendar size={11} />,
+                        bgColor: 'bg-purple-600 hover:bg-purple-700',
+                        title: 'Reagendar reunión',
+                      },
+                    };
 
-                    if (isSecondStage) {
-                      return (
-                        <button
-                          onClick={() => {
-                            setContactLeadId(lead.id);
-                            setIsContactModalOpen(true);
-                          }}
-                          className="w-full mt-2 flex items-center justify-center gap-1.5 py-1.5 px-2 text-[10px] font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-lg transition-colors"
-                          title="Registrar intento de contacto"
-                        >
-                          <Mail size={11} />
-                          Trabajar
-                        </button>
-                      );
-                    }
+                    const config = buttonConfig[leadStage.tipo as keyof typeof buttonConfig];
+                    if (!config) return null;
 
-                    return null;
+                    return (
+                      <button
+                        onClick={() => {
+                          setSelectedLeadId(lead.id);
+                          setSelectedStageType(leadStage.tipo);
+                          setIsStageModalOpen(true);
+                        }}
+                        className={`w-full mt-2 flex items-center justify-center gap-1.5 py-1.5 px-2 text-[10px] font-bold text-white ${config.bgColor} rounded-lg transition-colors`}
+                        title={config.title}
+                      >
+                        {config.icon}
+                        {config.label}
+                      </button>
+                    );
                   })()}
                 </div>
               ))}
@@ -222,29 +230,19 @@ export default function LeadsKanban({ leads, states, stages, onRefresh }: LeadsK
         ))}
       </div>
 
-      {campaignLeadId && (
-        <InitialCampaignModal
-          isOpen={isCampaignModalOpen}
-          lead={campaignLeadId ? leads.find(l => l.id === campaignLeadId) || null : null}
+      {selectedLeadId && selectedStageType && (
+        <StageModalRouter
+          stageType={selectedStageType}
+          leadId={selectedLeadId}
+          lead={selectedLeadId ? (leads.find(l => l.id === selectedLeadId) as any) : null}
+          stage={stages.find(s => s.tipo === selectedStageType) || null}
+          isOpen={isStageModalOpen}
           onClose={() => {
-            setIsCampaignModalOpen(false);
-            setCampaignLeadId(null);
+            setIsStageModalOpen(false);
+            setSelectedLeadId(null);
+            setSelectedStageType(null);
           }}
-          onCampaignStarted={onRefresh}
-        />
-      )}
-
-      {contactLeadId && (
-        <ContactAttemptModal
-          isOpen={isContactModalOpen}
-          leadId={contactLeadId}
-          lead={contactLeadId ? leads.find(l => l.id === contactLeadId) as any : null}
-          stages={stages}
-          onClose={() => {
-            setIsContactModalOpen(false);
-            setContactLeadId(null);
-          }}
-          onTaskResolved={onRefresh}
+          onSuccess={onRefresh}
         />
       )}
     </div>
