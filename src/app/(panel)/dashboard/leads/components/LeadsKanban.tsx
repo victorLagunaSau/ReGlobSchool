@@ -50,6 +50,22 @@ export default function LeadsKanban({ leads, states, stages, onRefresh }: LeadsK
     });
   }, [leads, searchTerm, filterState]);
 
+  // Detectar leads con etapas inválidas y reiniciarlos automáticamente
+  const leadsWithValidStatus = useMemo(() => {
+    const stageClavesSet = new Set(stages.map(s => s.clave));
+    const firstStage = stages.length > 0 ? stages[0] : DEFAULTS[0];
+
+    return filteredLeads.map(lead => {
+      const hasValidStatus = stageClavesSet.has(lead.status);
+      if (!hasValidStatus) {
+        // Reasignar a la primera etapa
+        supabase.from('leads').update({ status: firstStage.clave || 'prospecto' }).eq('id', lead.id).then(() => onRefresh());
+        return { ...lead, status: firstStage.clave || 'prospecto', statusReset: true };
+      }
+      return lead;
+    });
+  }, [filteredLeads, stages]);
+
   const columns = useMemo(() => {
     const stagesToUse = stages.length > 0 ? stages : DEFAULTS.map(s => ({
       id: s.value,
@@ -65,9 +81,9 @@ export default function LeadsKanban({ leads, states, stages, onRefresh }: LeadsK
     return stagesToUse.map((s) => ({
       value: s.clave,
       label: s.titulo,
-      leads: filteredLeads.filter((l) => l.status === s.clave),
+      leads: leadsWithValidStatus.filter((l) => l.status === s.clave),
     }));
-  }, [filteredLeads, stages]);
+  }, [leadsWithValidStatus, stages]);
 
   const handleDrop = async (newStatus: string) => {
     setDragOverStatus(null);
@@ -143,9 +159,16 @@ export default function LeadsKanban({ leads, states, stages, onRefresh }: LeadsK
                         <Maximize2 size={14} />
                       </button>
                     </div>
-                    <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-black" style={scoreStyle(lead.score_percent)}>
-                      {lead.score_percent.toFixed(0)}%
-                    </span>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      {(lead as any).statusReset && (
+                        <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-orange-100 text-orange-700 uppercase" title="Ficha reiniciada a la etapa inicial">
+                          Reiniciada
+                        </span>
+                      )}
+                      <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-black" style={scoreStyle(lead.score_percent)}>
+                        {lead.score_percent.toFixed(0)}%
+                      </span>
+                    </div>
                   </div>
 
                   <div className="text-[10px] text-slate-500 font-medium">{lead.business_type}</div>
