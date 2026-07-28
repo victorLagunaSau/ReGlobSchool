@@ -4,6 +4,7 @@ import React, { useState, useMemo } from 'react';
 import { supabase } from '@/src/lib/supabase/client';
 import { Trash2, Plus, ChevronDown, ChevronUp } from 'lucide-react';
 import ModalPipelineStage, { PipelineStageFormData } from './ModalPipelineStage';
+import PipelineFlowDiagram from './PipelineFlowDiagram';
 
 export interface PipelineStage {
   id: string;
@@ -17,6 +18,8 @@ export interface PipelineStage {
   tipo?: string;
   tasa_exito?: number;
   siguiente_etapa_id?: string | null;
+  continuar_a_id?: string | null;
+  regresar_a_id?: string | null;
 }
 
 interface LeadsConfigProps {
@@ -276,11 +279,14 @@ export default function LeadsConfig({ stages, onRefresh }: LeadsConfigProps) {
         </table>
       </div>
 
+      <PipelineFlowDiagram stages={stages} />
+
       <ModalPipelineStage
         isOpen={isModalOpen}
         isLoading={isLoading}
         stage={editingStage}
         existingClaves={stages.map(s => s.clave)}
+        allStages={stages.map(s => ({ id: s.id, titulo: s.titulo, clave: s.clave }))}
         onClose={() => {
           setIsModalOpen(false);
           setEditingStageId(null);

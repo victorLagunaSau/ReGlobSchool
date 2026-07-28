@@ -14,6 +14,14 @@ export interface PipelineStageFormData {
   tipo?: string;
   tasa_exito?: number;
   siguiente_etapa_id?: string | null;
+  continuar_a_id?: string | null;
+  regresar_a_id?: string | null;
+}
+
+interface PipelineStage {
+  id: string;
+  titulo: string;
+  clave: string;
 }
 
 interface ModalPipelineStageProp {
@@ -21,6 +29,7 @@ interface ModalPipelineStageProp {
   isLoading?: boolean;
   stage?: PipelineStageFormData & { id?: string };
   existingClaves?: string[];
+  allStages?: PipelineStage[];
   onClose: () => void;
   onConfirm: (data: PipelineStageFormData) => Promise<void>;
 }
@@ -30,6 +39,7 @@ export default function ModalPipelineStage({
   isLoading = false,
   stage,
   existingClaves = [],
+  allStages = [],
   onClose,
   onConfirm,
 }: ModalPipelineStageProp) {
@@ -47,6 +57,8 @@ export default function ModalPipelineStage({
         tipo: stage.tipo || 'contacto',
         tasa_exito: stage.tasa_exito || 0,
         siguiente_etapa_id: stage.siguiente_etapa_id || null,
+        continuar_a_id: stage.continuar_a_id || null,
+        regresar_a_id: stage.regresar_a_id || null,
       };
     }
     return {
@@ -60,6 +72,8 @@ export default function ModalPipelineStage({
       tipo: 'contacto',
       tasa_exito: 0,
       siguiente_etapa_id: null,
+      continuar_a_id: null,
+      regresar_a_id: null,
     };
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -78,6 +92,8 @@ export default function ModalPipelineStage({
         tipo: stage.tipo || 'contacto',
         tasa_exito: stage.tasa_exito || 0,
         siguiente_etapa_id: stage.siguiente_etapa_id || null,
+        continuar_a_id: stage.continuar_a_id || null,
+        regresar_a_id: stage.regresar_a_id || null,
       });
     } else {
       setFormData({
@@ -91,6 +107,8 @@ export default function ModalPipelineStage({
         tipo: 'contacto',
         tasa_exito: 0,
         siguiente_etapa_id: null,
+        continuar_a_id: null,
+        regresar_a_id: null,
       });
     }
     setStep('form');
@@ -159,6 +177,8 @@ export default function ModalPipelineStage({
         tipo: 'contacto',
         tasa_exito: 0,
         siguiente_etapa_id: null,
+        continuar_a_id: null,
+        regresar_a_id: null,
       });
     } catch (error) {
       console.error('Error confirming stage:', error);
@@ -369,6 +389,48 @@ export default function ModalPipelineStage({
                 max="100"
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs"
               />
+            </div>
+          </div>
+
+          <div className="space-y-4 border-t-2 border-slate-200 pt-4 mt-4">
+            <h3 className="text-xs font-bold text-slate-700">Flujo del Proceso</h3>
+
+            <div>
+              <label className="flex items-center gap-2 text-xs font-bold mb-2">
+                <div className="w-3 h-3 rounded bg-green-500"></div>
+                Si Éxito → Continuar a:
+              </label>
+              <select
+                value={formData.continuar_a_id || ''}
+                onChange={e => handleChange('continuar_a_id', e.target.value || null)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs"
+              >
+                <option value="">-- Sin siguiente (Terminal) --</option>
+                {allStages.map(s => (
+                  <option key={s.id} value={s.id}>
+                    {s.titulo} ({s.clave})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="flex items-center gap-2 text-xs font-bold mb-2">
+                <div className="w-3 h-3 rounded bg-yellow-400"></div>
+                Si Falla → Regresar a:
+              </label>
+              <select
+                value={formData.regresar_a_id || ''}
+                onChange={e => handleChange('regresar_a_id', e.target.value || null)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs"
+              >
+                <option value="">-- Sin retroceso (Eliminar) --</option>
+                {allStages.map(s => (
+                  <option key={s.id} value={s.id}>
+                    {s.titulo} ({s.clave})
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
         </div>
