@@ -91,7 +91,10 @@ export default function LeadsConfig({ stages, onRefresh }: LeadsConfigProps) {
           .update(data)
           .eq('id', editingStageId);
 
-        if (error) throw error;
+        if (error) {
+          console.error('Supabase error:', error);
+          throw new Error(error.message || 'Error al guardar');
+        }
       } else {
         const { error } = await supabase
           .from('pipeline_stages')
@@ -103,9 +106,9 @@ export default function LeadsConfig({ stages, onRefresh }: LeadsConfigProps) {
       setIsModalOpen(false);
       setEditingStageId(null);
       onRefresh();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving stage:', error);
-      alert('Error al guardar la etapa');
+      alert(`Error al guardar la etapa: ${error.message || 'Desconocido'}`);
     } finally {
       setIsLoading(false);
     }

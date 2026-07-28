@@ -254,7 +254,8 @@ export default function ModalPipelineStage({
         </div>
 
         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
-          <div className="grid grid-cols-2 gap-4">
+          {/* Row 1: Clave, Orden, Tipo */}
+          <div className="grid grid-cols-3 gap-4">
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-2">
                 Clave <span className="text-red-500">*</span>
@@ -264,7 +265,7 @@ export default function ModalPipelineStage({
                 value={formData.clave}
                 onChange={e => handleChange('clave', e.target.value)}
                 disabled={!!stage?.id}
-                placeholder="ej: prospecto"
+                placeholder="Numérico"
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-mono bg-slate-50 disabled:opacity-60"
               />
               {errors.clave && <p className="text-xs text-red-500 mt-1">{errors.clave}</p>}
@@ -278,13 +279,31 @@ export default function ModalPipelineStage({
                 type="number"
                 value={formData.orden}
                 onChange={e => handleChange('orden', parseInt(e.target.value) || 0)}
-                placeholder="1"
+                placeholder="Ej: 1"
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs"
               />
               {errors.orden && <p className="text-xs text-red-500 mt-1">{errors.orden}</p>}
             </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-2">
+                Tipo <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={formData.tipo || 'contacto'}
+                onChange={e => handleChange('tipo', e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs bg-white"
+              >
+                <option value="inicial">Inicial</option>
+                <option value="contacto">Contacto</option>
+                <option value="reunion">Reunión</option>
+                <option value="reagendar">Reagendar</option>
+                <option value="cierre">Cierre</option>
+              </select>
+            </div>
           </div>
 
+          {/* Título */}
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-2">
               Título <span className="text-red-500">*</span>
@@ -299,36 +318,40 @@ export default function ModalPipelineStage({
             {errors.titulo && <p className="text-xs text-red-500 mt-1">{errors.titulo}</p>}
           </div>
 
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-2">
-              Descripción
-            </label>
-            <textarea
-              value={formData.descripcion}
-              onChange={e => handleChange('descripcion', e.target.value)}
-              placeholder="Qué ocurre en esta etapa"
-              rows={3}
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs resize-none"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-2">
-              Objetivo Comercial
-            </label>
-            <textarea
-              value={formData.objetivo}
-              onChange={e => handleChange('objetivo', e.target.value)}
-              placeholder="Meta o propósito de la etapa"
-              rows={3}
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs resize-none"
-            />
-          </div>
-
+          {/* Descripción y Objetivo */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-2">
-                Límite de Pospuestas
+                Descripción
+              </label>
+              <textarea
+                value={formData.descripcion}
+                onChange={e => handleChange('descripcion', e.target.value)}
+                placeholder="Qué ocurre en esta etapa"
+                rows={2}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs resize-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-2">
+                Objetivo Comercial
+              </label>
+              <textarea
+                value={formData.objetivo}
+                onChange={e => handleChange('objetivo', e.target.value)}
+                placeholder="Meta o propósito de la etapa"
+                rows={2}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs resize-none"
+              />
+            </div>
+          </div>
+
+          {/* Row: Límite, Intentos, Tasa */}
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-2">
+                Límite Pospuestas
               </label>
               <input
                 type="number"
@@ -344,7 +367,7 @@ export default function ModalPipelineStage({
 
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-2">
-                Intentos Requeridos
+                Intentos Máximos
               </label>
               <input
                 type="number"
@@ -357,29 +380,10 @@ export default function ModalPipelineStage({
                 <p className="text-xs text-red-500 mt-1">{errors.intentos_requeridos}</p>
               )}
             </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-2">
-                Tipo de Etapa
-              </label>
-              <select
-                value={formData.tipo || 'contacto'}
-                onChange={e => handleChange('tipo', e.target.value)}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs"
-              >
-                <option value="inicial">Inicial</option>
-                <option value="contacto">Contacto</option>
-                <option value="reunion">Reunión</option>
-                <option value="reagendar">Reagendar</option>
-                <option value="cierre">Cierre</option>
-              </select>
-            </div>
 
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-2">
-                Tasa de Éxito (%)
+                Tasa Éxito (%)
               </label>
               <input
                 type="number"
@@ -392,45 +396,59 @@ export default function ModalPipelineStage({
             </div>
           </div>
 
-          <div className="space-y-4 border-t-2 border-slate-200 pt-4 mt-4">
-            <h3 className="text-xs font-bold text-slate-700">Flujo del Proceso</h3>
+          {/* Flujo del Proceso */}
+          <div className="border-t-2 border-slate-200 pt-4 mt-4">
+            <h3 className="text-xs font-bold text-slate-700 mb-3">Flujo del Proceso</h3>
+            <div className="grid grid-cols-2 gap-4">
+              {/* Si Falla - Izquierda */}
+              <div>
+                <label className="flex items-center gap-2 text-xs font-bold mb-2">
+                  <div className="w-3 h-3 rounded bg-yellow-400"></div>
+                  Si Falla → Regresar a:
+                </label>
+                <select
+                  value={formData.regresar_a_id || ''}
+                  onChange={e => handleChange('regresar_a_id', e.target.value || null)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs bg-white"
+                >
+                  <option value="">-- Sin retroceso (Eliminar) --</option>
+                  {allStages.map(s => (
+                    <option key={s.id} value={s.id}>
+                      {s.titulo}
+                    </option>
+                  ))}
+                </select>
+                {formData.regresar_a_id && (
+                  <div className="mt-2 text-xs text-yellow-700 bg-yellow-50 p-2 rounded">
+                    ✓ {allStages.find(s => s.id === formData.regresar_a_id)?.titulo}
+                  </div>
+                )}
+              </div>
 
-            <div>
-              <label className="flex items-center gap-2 text-xs font-bold mb-2">
-                <div className="w-3 h-3 rounded bg-green-500"></div>
-                Si Éxito → Continuar a:
-              </label>
-              <select
-                value={formData.continuar_a_id || ''}
-                onChange={e => handleChange('continuar_a_id', e.target.value || null)}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs"
-              >
-                <option value="">-- Sin siguiente (Terminal) --</option>
-                {allStages.map(s => (
-                  <option key={s.id} value={s.id}>
-                    {s.titulo} ({s.clave})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="flex items-center gap-2 text-xs font-bold mb-2">
-                <div className="w-3 h-3 rounded bg-yellow-400"></div>
-                Si Falla → Regresar a:
-              </label>
-              <select
-                value={formData.regresar_a_id || ''}
-                onChange={e => handleChange('regresar_a_id', e.target.value || null)}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs"
-              >
-                <option value="">-- Sin retroceso (Eliminar) --</option>
-                {allStages.map(s => (
-                  <option key={s.id} value={s.id}>
-                    {s.titulo} ({s.clave})
-                  </option>
-                ))}
-              </select>
+              {/* Si Éxito - Derecha */}
+              <div>
+                <label className="flex items-center gap-2 text-xs font-bold mb-2">
+                  <div className="w-3 h-3 rounded bg-green-500"></div>
+                  Éxito → Continuar a:
+                </label>
+                <select
+                  value={formData.continuar_a_id || ''}
+                  onChange={e => handleChange('continuar_a_id', e.target.value || null)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs bg-white"
+                >
+                  <option value="">-- Sin siguiente (Terminal) --</option>
+                  {allStages.map(s => (
+                    <option key={s.id} value={s.id}>
+                      {s.titulo}
+                    </option>
+                  ))}
+                </select>
+                {formData.continuar_a_id && (
+                  <div className="mt-2 text-xs text-green-700 bg-green-50 p-2 rounded">
+                    ✓ {allStages.find(s => s.id === formData.continuar_a_id)?.titulo}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -447,7 +465,7 @@ export default function ModalPipelineStage({
             disabled={isLoading}
             className="flex-1 px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-bold hover:bg-slate-800 transition-all disabled:opacity-50"
           >
-            Continuar
+            Guardar
           </button>
         </div>
       </div>
