@@ -17,19 +17,19 @@ CREATE INDEX idx_lead_decision_makers_created_at ON public.lead_decision_makers(
 -- RLS Policy
 ALTER TABLE public.lead_decision_makers ENABLE ROW LEVEL SECURITY;
 
--- Policy: Users can only see decision makers for leads they own
+-- Policy: Users can see/modify decision makers for leads they own or are authorized to access
 CREATE POLICY lead_decision_makers_owner_only ON public.lead_decision_makers
   FOR ALL USING (
-    lead_id IN (
-      SELECT id FROM public.leads WHERE owner_id = auth.uid()
-    )
-  );
-
--- Policy for authorized users (admin)
-CREATE POLICY lead_decision_makers_authorized ON public.lead_decision_makers
-  FOR SELECT USING (
     EXISTS (
-      SELECT 1 FROM public.profiles
-      WHERE id = auth.uid() AND authorized = true
+      SELECT 1 FROM public.leads
+      WHERE public.leads.id = lead_id
+      AND (public.leads.owner_id = auth.uid() OR public.is_authorized())
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.leads
+      WHERE public.leads.id = lead_id
+      AND (public.leads.owner_id = auth.uid() OR public.is_authorized())
     )
   );
