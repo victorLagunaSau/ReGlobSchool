@@ -179,19 +179,16 @@ export default function InitialCampaignModal({
         </div>
 
         {/* Content */}
-        <div className="p-6 space-y-4">
+        <div className="p-6 space-y-6">
           {/* Lead Info */}
-          <div className="space-y-2">
-            <div className="text-xs font-bold text-slate-500 uppercase">Prospecto</div>
-            <div>
-              <div className="font-bold text-slate-900">{lead.business_name}</div>
-              <div className="text-xs text-slate-500">{lead.business_type}</div>
-              {lead.zone_city && (
-                <div className="text-xs text-slate-500">
-                  {lead.zone_city}{lead.state_name ? `, ${lead.state_name}` : ''}
-                </div>
-              )}
-            </div>
+          <div className="space-y-1 pb-4 border-b-2 border-slate-300">
+            <div className="text-right text-xs text-slate-600">{lead.business_type}</div>
+            <div className="text-3xl font-bold text-slate-900">{lead.business_name}</div>
+            {lead.zone_city && (
+              <div className="text-sm text-slate-600">
+                {lead.zone_city}{lead.state_name ? `, ${lead.state_name}` : ''}
+              </div>
+            )}
           </div>
 
           {/* Calendar */}
