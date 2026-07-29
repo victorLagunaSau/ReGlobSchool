@@ -95,6 +95,15 @@ export default function ContactAttemptModal({
   const [discardCountdown, setDiscardCountdown] = useState(5);
   const commentRef = useRef<HTMLTextAreaElement>(null);
 
+  // Contact & qualification state
+  const [contactPhones, setContactPhones] = useState<any[]>([]);
+  const [contactEmails, setContactEmails] = useState<any[]>([]);
+  const [selectedInterest, setSelectedInterest] = useState<'Alto' | 'Medio' | 'Bajo' | null>(null);
+  const [selectedImportance, setSelectedImportance] = useState<1 | 2 | 3 | null>(null);
+  const [newPhone, setNewPhone] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [decisionMakers, setDecisionMakers] = useState<any[]>([]);
+
   // Handle discard countdown
   useEffect(() => {
     if (selectedOutcome !== 'descartar') {
@@ -141,16 +150,29 @@ export default function ContactAttemptModal({
           setAttemptNumber(taskData.attempt_number || 0);
         }
 
-        // Fetch lead's assigned_to
+        // Fetch lead's assigned_to and contact info
         const { data: leadData, error: leadError } = await supabase
           .from('leads')
-          .select('assigned_to')
+          .select('assigned_to, contact_phones, contact_emails')
           .eq('id', leadId)
           .single();
 
         if (leadData) {
           setAssignedTo(leadData.assigned_to);
           setNewResponsible(leadData.assigned_to || '');
+          setContactPhones(leadData.contact_phones || []);
+          setContactEmails(leadData.contact_emails || []);
+        }
+
+        // Fetch decision makers
+        const { data: dmData } = await supabase
+          .from('lead_decision_makers')
+          .select('*')
+          .eq('lead_id', leadId)
+          .order('created_at', { ascending: true });
+
+        if (dmData) {
+          setDecisionMakers(dmData);
         }
 
         // Fetch attempt notes history
@@ -185,8 +207,10 @@ export default function ContactAttemptModal({
     setError(null);
   };
 
-  const saveAttemptNote = async (noteType: 'attempt' | 'success' | 'retry' | 'discard') => {
+  const saveAttemptNote = async (noteType: 'attempt' | 'success' | 'retry' | 'discard', qualifiedComment?: string) => {
     if (!currentTask || !note.trim()) return;
+
+    const noteText = qualifiedComment || note.trim();
 
     try {
       const { error } = await supabase
@@ -197,13 +221,73 @@ export default function ContactAttemptModal({
           stage_titulo: 'Etapa 2 - Intento de Contacto',
           attempt_number: attemptNumber,
           note_type: noteType,
-          note_text: note.trim(),
+          note_text: noteText,
         });
 
       if (error) console.error('Error saving note:', error);
     } catch (err) {
       console.error('Error saving attempt note:', err);
     }
+  };
+
+  const addContactPhone = async (phone: string) => {
+    if (!leadId || !phone.trim()) return;
+
+    const newPhoneEntry = {
+      value: phone.trim(),
+      source: 'manual',
+      added_at: new Date().toISOString(),
+    };
+
+    const updated = [...contactPhones, newPhoneEntry];
+    setContactPhones(updated);
+    setNewPhone('');
+
+    try {
+      await supabase
+        .from('leads')
+        .update({ contact_phones: updated })
+        .eq('id', leadId);
+    } catch (err) {
+      console.error('Error saving phone:', err);
+    }
+  };
+
+  const addContactEmail = async (email: string) => {
+    if (!leadId || !email.trim()) return;
+
+    const newEmailEntry = {
+      value: email.trim(),
+      source: 'manual',
+      added_at: new Date().toISOString(),
+    };
+
+    const updated = [...contactEmails, newEmailEntry];
+    setContactEmails(updated);
+    setNewEmail('');
+
+    try {
+      await supabase
+        .from('leads')
+        .update({ contact_emails: updated })
+        .eq('id', leadId);
+    } catch (err) {
+      console.error('Error saving email:', err);
+    }
+  };
+
+  const getQualifiedComment = (): string => {
+    let comment = note.trim();
+    const qualifiers: string[] = [];
+
+    if (selectedInterest) qualifiers.push(`Interés: ${selectedInterest}`);
+    if (selectedImportance) qualifiers.push(`Importancia: ${selectedImportance}`);
+
+    if (qualifiers.length > 0) {
+      comment += ` [${qualifiers.join(', ')}]`;
+    }
+
+    return comment;
   };
 
   const handleSuccess = async () => {
@@ -236,7 +320,8 @@ export default function ContactAttemptModal({
         throw new Error('No se encontró la siguiente etapa en el pipeline');
       }
 
-      await saveAttemptNote('success');
+      const qualifiedComment = getQualifiedComment();
+      await saveAttemptNote('success', qualifiedComment);
 
       // Log interaction
       await supabase
@@ -246,17 +331,19 @@ export default function ContactAttemptModal({
           interaction_type: 'task_outcome',
           actor_id: (await supabase.auth.getUser()).data.user?.id,
           action_label: 'Contacto exitoso',
-          message: note.trim(),
+          message: qualifiedComment,
           metadata: {
             contact_methods: {
               llamada: callAttempted,
               email: emailAttempted,
             },
             assigned_to: assignedTo,
+            interest: selectedInterest,
+            importance: selectedImportance,
           },
         });
 
-      // Advance to next stage
+      // Advance to next stage with qualified comment
       await resolveTaskWithPipeline(
         {
           id: currentTask.id,
@@ -267,7 +354,7 @@ export default function ContactAttemptModal({
         },
         'exito',
         nextStage.clave,
-        note.trim()
+        qualifiedComment
       );
 
       resetForm();
@@ -303,7 +390,8 @@ export default function ContactAttemptModal({
 
     setIsSubmitting(true);
     try {
-      await saveAttemptNote('retry');
+      const qualifiedComment = getQualifiedComment();
+      await saveAttemptNote('retry', qualifiedComment);
       const nextDate = calculateNextRetryDate(days);
 
       await resolveTaskWithPipeline(
@@ -316,7 +404,7 @@ export default function ContactAttemptModal({
         },
         'reintentar',
         undefined,
-        note.trim(),
+        qualifiedComment,
         nextDate.toISOString().split('T')[0]
       );
 
@@ -341,7 +429,8 @@ export default function ContactAttemptModal({
 
     setIsSubmitting(true);
     try {
-      await saveAttemptNote('discard');
+      const qualifiedComment = getQualifiedComment();
+      await saveAttemptNote('discard', qualifiedComment);
 
       await resolveTaskWithPipeline(
         {
@@ -353,7 +442,7 @@ export default function ContactAttemptModal({
         },
         'descartar',
         undefined,
-        note.trim(),
+        qualifiedComment,
         undefined
       );
 
@@ -570,6 +659,71 @@ export default function ContactAttemptModal({
                 </div>
               )}
 
+              {/* Dynamic Contacts Section - Only for contacto type */}
+              {stages?.[0]?.tipo === 'contacto' && (
+                <div className="space-y-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <h3 className="text-sm font-bold text-slate-900">Contactos Disponibles</h3>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    {/* Phones */}
+                    <div className="space-y-2">
+                      <label className="block text-xs font-bold text-slate-700">Teléfonos</label>
+                      <div className="space-y-1">
+                        {lead?.phone && (
+                          <a href={`tel:${lead.phone}`} className="block px-2 py-1.5 bg-white border border-slate-200 rounded text-xs text-blue-600 hover:bg-blue-50 transition-all truncate">
+                            📞 {lead.phone}
+                          </a>
+                        )}
+                        {decisionMakers.map((dm) =>
+                          dm.telefono && (
+                            <a key={dm.id} href={`tel:${dm.telefono}`} className="block px-2 py-1.5 bg-white border border-slate-200 rounded text-xs text-blue-600 hover:bg-blue-50 transition-all truncate" title={dm.nombre}>
+                              📞 {dm.nombre}
+                            </a>
+                          )
+                        )}
+                        {contactPhones.map((phone, idx) => (
+                          <a key={idx} href={`tel:${phone.value}`} className="block px-2 py-1.5 bg-white border border-slate-200 rounded text-xs text-blue-600 hover:bg-blue-50 transition-all">
+                            📞 {phone.value}
+                          </a>
+                        ))}
+                      </div>
+                      <div className="flex gap-1">
+                        <input type="tel" value={newPhone} onChange={(e) => setNewPhone(e.target.value)} placeholder="Agregar..." className="flex-1 px-2 py-1 border border-slate-300 rounded text-xs" />
+                        <button onClick={() => addContactPhone(newPhone)} className="px-2 py-1 bg-blue-600 text-white text-xs font-semibold rounded hover:bg-blue-700">+</button>
+                      </div>
+                    </div>
+
+                    {/* Emails */}
+                    <div className="space-y-2">
+                      <label className="block text-xs font-bold text-slate-700">Emails</label>
+                      <div className="space-y-1">
+                        {lead?.email && (
+                          <a href={`mailto:${lead.email}`} className="block px-2 py-1.5 bg-white border border-slate-200 rounded text-xs text-blue-600 hover:bg-blue-50 transition-all truncate">
+                            ✉️ {lead.email}
+                          </a>
+                        )}
+                        {decisionMakers.map((dm) =>
+                          dm.email && (
+                            <a key={dm.id} href={`mailto:${dm.email}`} className="block px-2 py-1.5 bg-white border border-slate-200 rounded text-xs text-blue-600 hover:bg-blue-50 transition-all truncate" title={dm.nombre}>
+                              ✉️ {dm.nombre}
+                            </a>
+                          )
+                        )}
+                        {contactEmails.map((email, idx) => (
+                          <a key={idx} href={`mailto:${email.value}`} className="block px-2 py-1.5 bg-white border border-slate-200 rounded text-xs text-blue-600 hover:bg-blue-50 transition-all">
+                            ✉️ {email.value}
+                          </a>
+                        ))}
+                      </div>
+                      <div className="flex gap-1">
+                        <input type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="Agregar..." className="flex-1 px-2 py-1 border border-slate-300 rounded text-xs" />
+                        <button onClick={() => addContactEmail(newEmail)} className="px-2 py-1 bg-blue-600 text-white text-xs font-semibold rounded hover:bg-blue-700">+</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Progress bar with information - After actions */}
               {stages?.[0]?.tipo === 'contacto' && (
                 <div className="space-y-2 pb-4 border-b border-slate-200">
@@ -767,7 +921,7 @@ export default function ContactAttemptModal({
             </h3>
 
             {/* Notes Input - Always visible */}
-            <div className="mb-4 pb-4 border-b border-slate-200">
+            <div className="mb-4">
               <label className="block text-xs font-bold text-slate-700 mb-2">
                 Comentarios <span className="text-slate-400">*</span>
               </label>
@@ -792,13 +946,49 @@ export default function ContactAttemptModal({
               )}
             </div>
 
-            {/* Attempt History - Chronological order */}
+            {/* Qualification - Optional selects below comments */}
+            <div className="pb-4 border-b border-slate-200 space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Interés</label>
+                  <select
+                    value={selectedInterest || ''}
+                    onChange={(e) => setSelectedInterest(e.target.value as any || null)}
+                    className="w-full px-2 py-1.5 border border-slate-300 rounded text-xs"
+                  >
+                    <option value="">Seleccionar...</option>
+                    <option value="Alto">Alto</option>
+                    <option value="Medio">Medio</option>
+                    <option value="Bajo">Bajo</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Importancia</label>
+                  <select
+                    value={selectedImportance || ''}
+                    onChange={(e) => setSelectedImportance(e.target.value ? (parseInt(e.target.value) as any) : null)}
+                    className="w-full px-2 py-1.5 border border-slate-300 rounded text-xs"
+                  >
+                    <option value="">Seleccionar...</option>
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Attempt History - Reverse chronological order */}
             <div className="flex-1 overflow-y-auto">
               {attemptNotes.length === 0 ? (
                 <p className="text-xs text-slate-400 text-center py-4">Sin historial</p>
               ) : (
-                <div className="space-y-2">
-                  {attemptNotes.map((note) => {
+                <>
+                  <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 mb-2 mt-3 sticky top-0 bg-slate-50 pb-2">
+                    Comentarios anteriores:
+                  </h3>
+                  <div className="space-y-2">
+                    {attemptNotes.slice().reverse().map((note) => {
                     const isSuccess = note.note_type === 'success';
                     const bgColor = isSuccess ? 'bg-emerald-50' : 'bg-white';
                     const borderColor = isSuccess ? 'border-emerald-200' : 'border-slate-200';
@@ -816,8 +1006,9 @@ export default function ContactAttemptModal({
                         </p>
                       </div>
                     );
-                  })}
-                </div>
+                    })}
+                  </div>
+                </>
               )}
             </div>
 
