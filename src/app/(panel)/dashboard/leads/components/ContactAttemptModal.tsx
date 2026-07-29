@@ -783,13 +783,7 @@ export default function ContactAttemptModal({
                     )}
                     <button
                       type="button"
-                      onClick={() => {
-                        if (!selectedOutcome) {
-                          setSelectedOutcome('exito');
-                        } else if (selectedOutcome === 'exito') {
-                          handleSuccess();
-                        }
-                      }}
+                      onClick={handleSuccess}
                       disabled={isSubmitting}
                       className="flex items-center justify-center gap-1 px-2 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all font-semibold text-xs disabled:opacity-50"
                     >
