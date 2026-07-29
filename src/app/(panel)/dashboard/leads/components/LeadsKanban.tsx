@@ -290,6 +290,10 @@ export default function LeadsKanban({ leads, states, stages, onRefresh }: LeadsK
             setSelectedStageType(null);
           }}
           onSuccess={onRefresh}
+          onSuccessWithNextStage={(nextStageType: string) => {
+            setSelectedStageType(nextStageType);
+            onRefresh();
+          }}
         />
       )}
     </div>

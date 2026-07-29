@@ -25,6 +25,7 @@ interface ContactAttemptModalProps {
   stages: Array<{ id: string; clave: string; titulo: string; orden: number; siguiente_etapa_id?: string | null; continuar_a_id?: string | null }>;
   onClose: () => void;
   onTaskResolved?: () => void;
+  onSuccessWithNextStage?: (nextStageType: string) => void;
 }
 
 interface LeadTask {
@@ -43,6 +44,7 @@ export default function ContactAttemptModal({
   stages,
   onClose,
   onTaskResolved,
+  onSuccessWithNextStage,
 }: ContactAttemptModalProps) {
   const [currentTask, setCurrentTask] = useState<LeadTask | null>(null);
   const [attemptNumber, setAttemptNumber] = useState(0);
@@ -222,12 +224,16 @@ export default function ContactAttemptModal({
           attempt_number: currentTask.attempt_number,
         },
         'exito',
-        nextStage.id,
+        nextStage.clave,
         note.trim()
       );
 
       resetForm();
       onClose();
+      // Auto-open next stage modal
+      if (nextStage?.tipo) {
+        onSuccessWithNextStage?.(nextStage.tipo);
+      }
       onTaskResolved?.();
     } catch (err) {
       console.error('Error marking success:', err);
@@ -747,26 +753,24 @@ export default function ContactAttemptModal({
               {leadId && <DecisionMakersForm leadId={leadId} />}
             </div>
 
-            {/* Notes Input */}
-            {selectedOutcome && (
-              <div className="mb-4 pb-4 border-b border-slate-200">
-                <label className="block text-xs font-bold text-slate-700 mb-2">
-                  Comentarios <span className="text-red-500">*</span>
-                </label>
-                <textarea
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  disabled={isSubmitting}
-                  placeholder="Describe lo que sucedió..."
-                  maxLength={500}
-                  rows={3}
-                  className="w-full px-2 py-1.5 border border-slate-300 rounded-lg text-xs resize-none focus:outline-slate-400 disabled:opacity-60"
-                />
-                <p className="text-[10px] text-slate-600 mt-1">
-                  {note.length}/500 (mínimo 10)
-                </p>
-              </div>
-            )}
+            {/* Notes Input - Always visible */}
+            <div className="mb-4 pb-4 border-b border-slate-200">
+              <label className="block text-xs font-bold text-slate-700 mb-2">
+                Comentarios <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                disabled={isSubmitting}
+                placeholder="Describe lo que sucedió..."
+                maxLength={500}
+                rows={3}
+                className="w-full px-2 py-1.5 border border-slate-300 rounded-lg text-xs resize-none focus:outline-slate-400 disabled:opacity-60"
+              />
+              <p className="text-[10px] text-slate-600 mt-1">
+                {note.length}/500 (mínimo 10)
+              </p>
+            </div>
 
             {/* Attempt History */}
             <div className="flex-1 overflow-y-auto mb-4 pb-4 border-b border-slate-200">

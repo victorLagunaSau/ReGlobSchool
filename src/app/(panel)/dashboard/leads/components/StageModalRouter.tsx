@@ -13,6 +13,7 @@ interface StageModalRouterProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: () => void;
+  onSuccessWithNextStage?: (nextStageType: string) => void;
 }
 
 export default function StageModalRouter({
@@ -23,6 +24,7 @@ export default function StageModalRouter({
   isOpen,
   onClose,
   onSuccess,
+  onSuccessWithNextStage,
 }: StageModalRouterProps) {
   if (!isOpen) return null;
 
@@ -48,6 +50,7 @@ export default function StageModalRouter({
           stages={[stage]}
           onClose={onClose}
           onTaskResolved={onSuccess}
+          onSuccessWithNextStage={onSuccessWithNextStage}
         />
       );
 
