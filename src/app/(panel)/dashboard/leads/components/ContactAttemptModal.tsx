@@ -22,7 +22,7 @@ interface ContactAttemptModalProps {
     country_name: string | null;
     created_at: string;
   } | null;
-  stages: Array<{ id: string; clave: string; titulo: string; orden: number; siguiente_etapa_id?: string | null }>;
+  stages: Array<{ id: string; clave: string; titulo: string; orden: number; siguiente_etapa_id?: string | null; continuar_a_id?: string | null }>;
   onClose: () => void;
   onTaskResolved?: () => void;
 }
@@ -170,26 +170,23 @@ export default function ContactAttemptModal({
       return;
     }
 
-    if (!scheduledDate) {
-      setError('Debes seleccionar una fecha para la demostración');
-      return;
-    }
-
     setIsSubmitting(true);
     try {
-      const selectedDate = new Date(scheduledDate);
-      if (selectedDate <= new Date()) {
-        setError('La fecha debe ser en el futuro');
-        setIsSubmitting(false);
-        return;
+      // Get all stages to find next stage
+      const { data: allStages, error: stagesError } = await supabase
+        .from('pipeline_stages')
+        .select('*')
+        .order('orden');
+
+      if (stagesError || !allStages) {
+        throw new Error('Error al cargar las etapas del pipeline');
       }
 
-      // Get current stage to find next stage via siguiente_etapa_id
-      const currentStage = stages[0]; // Current stage is passed in stages array
-      const nextStageId = currentStage?.siguiente_etapa_id;
+      const currentStage = stages[0];
+      const nextStageId = currentStage?.continuar_a_id || currentStage?.siguiente_etapa_id;
       const nextStage = nextStageId
-        ? stages.find(s => s.id === nextStageId)
-        : stages.find(s => s.orden === (currentStage?.orden || 2) + 1);
+        ? allStages.find(s => s.id === nextStageId)
+        : allStages.find(s => s.orden === (currentStage?.orden || 2) + 1);
 
       if (!nextStage) {
         throw new Error('No se encontró la siguiente etapa en el pipeline');
@@ -197,7 +194,7 @@ export default function ContactAttemptModal({
 
       await saveAttemptNote('success');
 
-      // Log interaction with decision makers
+      // Log interaction
       await supabase
         .from('lead_interactions')
         .insert({
@@ -211,12 +208,11 @@ export default function ContactAttemptModal({
               llamada: callAttempted,
               email: emailAttempted,
             },
-            decision_makers: decisionMakers,
-            scheduled_date: scheduledDate,
-            modality: modality,
+            assigned_to: assignedTo,
           },
         });
 
+      // Advance to next stage
       await resolveTaskWithPipeline(
         {
           id: currentTask.id,
@@ -227,8 +223,7 @@ export default function ContactAttemptModal({
         },
         'exito',
         nextStage.id,
-        note.trim(),
-        calendarLink || undefined
+        note.trim()
       );
 
       resetForm();
@@ -328,22 +323,13 @@ export default function ContactAttemptModal({
     <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-xl max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="bg-slate-900 text-white p-6 border-b border-slate-800 space-y-3">
+        <div className="bg-slate-900 text-white p-6 border-b border-slate-800">
           <div className="flex items-start justify-between">
-            <div className="flex-1">
-              {lead && (
-                <>
-                  <h2 className="text-lg font-bold">{lead.business_name}</h2>
-                  <p className="text-xs text-slate-300 mt-1">
-                    Etapa {stages?.[0]?.orden} {stages?.[0]?.tipo && `- Tipo: ${stages[0].tipo.charAt(0).toUpperCase() + stages[0].tipo.slice(1)}`}
-                  </p>
-                  <p className="text-sm text-slate-400 mt-1">
-                    {lead.zone_city && `${lead.zone_city}, `}
-                    {lead.state_name && `${lead.state_name}`}
-                    {lead.country_name && ` • ${lead.country_name}`}
-                  </p>
-                </>
-              )}
+            <div>
+              <h2 className="text-lg font-bold">Contacto Inicial</h2>
+              <p className="text-xs text-slate-300 mt-1">
+                Etapa {stages?.[0]?.orden} {stages?.[0]?.tipo && `- Tipo: ${stages[0].tipo.charAt(0).toUpperCase() + stages[0].tipo.slice(1)}`}
+              </p>
             </div>
             <button
               onClick={onClose}
@@ -353,72 +339,22 @@ export default function ContactAttemptModal({
               <X size={20} />
             </button>
           </div>
-
-          <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-800">
-            <div>
-              <p className="text-xs text-slate-400 mb-1">Etapa 2 - Intento de Contacto</p>
-              {currentTask && (
-                <span className="px-2.5 py-1 bg-slate-700 rounded text-sm font-bold">
-                  {attemptNumber} de {maxAttempts}
-                </span>
-              )}
-            </div>
-
-            <div className="flex-1">
-              <p className="text-xs text-slate-400 mb-1">Responsable</p>
-              {!isEditingResponsible ? (
-                <button
-                  onClick={() => {
-                    setIsEditingResponsible(true);
-                    setNewResponsible(assignedTo || '');
-                  }}
-                  className="px-3 py-1 bg-slate-800 hover:bg-slate-700 rounded text-sm font-semibold text-white w-full text-left"
-                >
-                  {assignedTo || '+ Asignar'}
-                </button>
-              ) : (
-                <div className="flex gap-1">
-                  <input
-                    type="text"
-                    value={newResponsible}
-                    onChange={(e) => setNewResponsible(e.target.value)}
-                    placeholder="Nombre del responsable"
-                    className="flex-1 px-2 py-1 rounded text-sm bg-slate-800 text-white placeholder-slate-500 focus:outline-slate-500"
-                    disabled={isSubmitting}
-                  />
-                  <button
-                    onClick={async () => {
-                      if (leadId && newResponsible.trim()) {
-                        await supabase
-                          .from('leads')
-                          .update({ assigned_to: newResponsible.trim() })
-                          .eq('id', leadId);
-                        setAssignedTo(newResponsible.trim());
-                      }
-                      setIsEditingResponsible(false);
-                    }}
-                    className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 rounded text-sm font-bold text-white disabled:opacity-50"
-                    disabled={isSubmitting}
-                  >
-                    ✓
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
         </div>
 
         {/* Content */}
         <div className="flex-1 overflow-hidden flex">
-          {/* Left Panel: Actions */}
+          {/* Left Panel: Datos de la Empresa + Acciones */}
           <div className="flex-1 overflow-y-auto p-6 space-y-6 border-r border-slate-200">
-            {/* Progress bar */}
-            <div className="w-full bg-slate-200 rounded-full h-2">
-            <div
-              className="bg-blue-600 h-2 rounded-full transition-all"
-              style={{ width: `${(attemptNumber / maxAttempts) * 100}%` }}
-            />
-          </div>
+            {/* Datos de la Empresa */}
+            {lead && (
+              <div className="space-y-1 pb-4 border-b-2 border-slate-300">
+                <div className="text-3xl font-bold text-slate-900">{lead.business_name}</div>
+                <div className="text-sm text-slate-600">
+                  {lead.zone_city && `${lead.zone_city}, `}
+                  {lead.state_name && `${lead.state_name}`}
+                </div>
+              </div>
+            )}
 
           {/* Loading state */}
           {loading && (
@@ -522,100 +458,136 @@ export default function ContactAttemptModal({
                 )}
               </div>
 
-              {/* Action Buttons */}
-              <div className="space-y-3 bg-slate-50 p-4 rounded-lg border border-slate-200">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-bold text-slate-600 uppercase">Acciones de Contacto</p>
-                  {(callAttempted || emailAttempted) && (
-                    <div className="flex gap-1 text-xs">
-                      {callAttempted && <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded font-bold flex items-center gap-1"><Phone size={10} />✓</span>}
-                      {emailAttempted && <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded font-bold flex items-center gap-1"><Mail size={10} />✓</span>}
-                    </div>
-                  )}
-                </div>
-                <div className="space-y-3">
-                  {lead.phone && (
-                    <div>
-                      <div className="text-xs text-slate-600 mb-2 flex items-center gap-1">
-                        <Phone size={13} className="text-slate-400" />
-                        <span className="font-semibold">{lead.phone}</span>
+              {/* Action Buttons - Only for contacto type */}
+              {stages?.[0]?.tipo === 'contacto' && (
+                <div className="space-y-3 bg-slate-50 p-4 rounded-lg border border-slate-200">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-bold text-slate-600 uppercase">Acciones de Contacto</p>
+                    {(callAttempted || emailAttempted) && (
+                      <div className="flex gap-1 text-xs">
+                        {callAttempted && <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded font-bold flex items-center gap-1"><Phone size={10} />✓</span>}
+                        {emailAttempted && <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded font-bold flex items-center gap-1"><Mail size={10} />✓</span>}
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setCallAttempted(!callAttempted)}
-                        disabled={isSubmitting}
-                        className={`w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg font-semibold text-sm transition-all ${
-                          callAttempted
-                            ? 'bg-emerald-100 border-2 border-emerald-400 text-emerald-900'
-                            : 'bg-slate-100 border border-slate-200 text-slate-700 hover:bg-slate-200'
-                        } disabled:opacity-50`}
-                      >
-                        <Phone size={16} />
-                        {callAttempted ? '✓ Llamada Realizada' : 'Registrar Llamada'}
-                      </button>
-                    </div>
-                  )}
-                  {lead.email && (
-                    <div>
-                      <div className="text-xs text-slate-600 mb-2 flex items-center gap-1">
-                        <Mail size={13} className="text-slate-400" />
-                        <span className="font-semibold truncate">{lead.email}</span>
+                    )}
+                  </div>
+                  <div className="space-y-3">
+                    {lead.phone && (
+                      <div>
+                        <div className="text-xs text-slate-600 mb-2 flex items-center gap-1">
+                          <Phone size={13} className="text-slate-400" />
+                          <span className="font-semibold">{lead.phone}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setCallAttempted(!callAttempted)}
+                          disabled={isSubmitting}
+                          className={`w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg font-semibold text-sm transition-all ${
+                            callAttempted
+                              ? 'bg-emerald-100 border-2 border-emerald-400 text-emerald-900'
+                              : 'bg-slate-100 border border-slate-200 text-slate-700 hover:bg-slate-200'
+                          } disabled:opacity-50`}
+                        >
+                          <Phone size={16} />
+                          {callAttempted ? '✓ Llamada Realizada' : 'Registrar Llamada'}
+                        </button>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setEmailAttempted(!emailAttempted)}
-                        disabled={isSubmitting}
-                        className={`w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg font-semibold text-sm transition-all ${
-                          emailAttempted
-                            ? 'bg-emerald-100 border-2 border-emerald-400 text-emerald-900'
-                            : 'bg-slate-100 border border-slate-200 text-slate-700 hover:bg-slate-200'
-                        } disabled:opacity-50`}
-                      >
-                        <Mail size={16} />
-                        {emailAttempted ? '✓ Email Enviado' : 'Registrar Email'}
-                      </button>
-                    </div>
-                  )}
+                    )}
+                    {lead.email && (
+                      <div>
+                        <div className="text-xs text-slate-600 mb-2 flex items-center gap-1">
+                          <Mail size={13} className="text-slate-400" />
+                          <span className="font-semibold truncate">{lead.email}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setEmailAttempted(!emailAttempted)}
+                          disabled={isSubmitting}
+                          className={`w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg font-semibold text-sm transition-all ${
+                            emailAttempted
+                              ? 'bg-emerald-100 border-2 border-emerald-400 text-emerald-900'
+                              : 'bg-slate-100 border border-slate-200 text-slate-700 hover:bg-slate-200'
+                          } disabled:opacity-50`}
+                        >
+                          <Mail size={16} />
+                          {emailAttempted ? '✓ Email Enviado' : 'Registrar Email'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
 
-              {/* Outcome Selection */}
-              {!selectedOutcome && (
+              {/* Progress bar with information - After actions */}
+              {stages?.[0]?.tipo === 'contacto' && (
+                <div className="space-y-2 pb-4 border-b border-slate-200">
+                  <p className="text-xs font-bold text-slate-600 uppercase">Progreso de Intentos</p>
+                  <div className="w-full bg-slate-200 rounded-full h-2">
+                    <div
+                      className="bg-blue-600 h-2 rounded-full transition-all"
+                      style={{ width: `${(attemptNumber / maxAttempts) * 100}%` }}
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-500">
+                    {attemptNumber} de {maxAttempts} intentos realizados
+                  </p>
+                </div>
+              )}
+
+              {/* Result Buttons - All 3 together - Only for contacto type */}
+              {stages?.[0]?.tipo === 'contacto' && (
                 <div className="space-y-2">
                   <p className="text-xs font-bold text-slate-600 uppercase">Resultado del Intento</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     <button
                       type="button"
-                      onClick={() => setSelectedOutcome('exito')}
-                      disabled={isSubmitting}
-                      className="flex items-center justify-center gap-2 px-3 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all font-semibold text-sm disabled:opacity-50"
-                    >
-                      <CheckCircle2 size={18} />
-                      Éxito
-                    </button>
-                    {!isAttempt4 && (
-                      <button
-                        type="button"
-                        onClick={() => setSelectedOutcome('reintentar')}
-                        disabled={isSubmitting}
-                        className="flex items-center justify-center gap-2 px-3 py-3 bg-slate-500 text-white rounded-lg hover:bg-slate-600 transition-all font-semibold text-sm disabled:opacity-50"
-                      >
-                        <RotateCcw size={18} />
-                        Reintentar
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => setSelectedOutcome('descartar')}
+                      onClick={() => {
+                        if (!selectedOutcome) {
+                          setSelectedOutcome('descartar');
+                        } else if (selectedOutcome === 'descartar') {
+                          handleDescartar();
+                        }
+                      }}
                       disabled={!canDiscard || isSubmitting}
-                      className={`flex items-center justify-center gap-2 px-3 py-3 rounded-lg font-semibold text-sm transition-all ${
+                      className={`flex items-center justify-center gap-1 px-2 py-2.5 rounded-lg font-semibold text-xs transition-all ${
                         canDiscard
                           ? 'bg-red-600 text-white hover:bg-red-700'
                           : 'bg-slate-200 text-slate-400 cursor-not-allowed'
                       } disabled:opacity-50`}
                     >
-                      <Trash2 size={18} />
+                      <Trash2 size={14} />
                       Descartar
+                    </button>
+                    {!isAttempt4 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!selectedOutcome) {
+                            setSelectedOutcome('reintentar');
+                          } else if (selectedOutcome === 'reintentar') {
+                            handleReintentar();
+                          }
+                        }}
+                        disabled={isSubmitting}
+                        className="flex items-center justify-center gap-1 px-2 py-2.5 bg-slate-500 text-white rounded-lg hover:bg-slate-600 transition-all font-semibold text-xs disabled:opacity-50"
+                      >
+                        <RotateCcw size={14} />
+                        Reintentar
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!selectedOutcome) {
+                          setSelectedOutcome('exito');
+                        } else if (selectedOutcome === 'exito') {
+                          handleSuccess();
+                        }
+                      }}
+                      disabled={isSubmitting}
+                      className="flex items-center justify-center gap-1 px-2 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all font-semibold text-xs disabled:opacity-50"
+                    >
+                      <CheckCircle2 size={14} />
+                      Éxito
                     </button>
                   </div>
                   {!canDiscard && (
@@ -623,92 +595,6 @@ export default function ContactAttemptModal({
                       Puedes descartar después del intento 2
                     </p>
                   )}
-                </div>
-              )}
-
-              {/* Success Flow */}
-              {selectedOutcome === 'exito' && (
-                <div className="space-y-4 p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-bold text-emerald-900">Agendar Demostración</h3>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedOutcome(null);
-                        setScheduledDate('');
-                        setCalendarLink('');
-                      }}
-                      className="text-emerald-600 hover:text-emerald-800 text-xs font-bold"
-                    >
-                      Cambiar
-                    </button>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-bold text-emerald-900 mb-2">
-                      Fecha y Hora <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="datetime-local"
-                      value={scheduledDate}
-                      onChange={(e) => setScheduledDate(e.target.value)}
-                      disabled={isSubmitting}
-                      className="w-full px-3 py-2 border border-emerald-300 rounded-lg text-sm bg-white focus:outline-emerald-600 disabled:opacity-60"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-bold text-emerald-900 mb-2">
-                      Modalidad <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={modality}
-                      onChange={(e) => setModality(e.target.value as 'virtual' | 'presencial')}
-                      disabled={isSubmitting}
-                      className="w-full px-3 py-2 border border-emerald-300 rounded-lg text-sm bg-white focus:outline-emerald-600 disabled:opacity-60"
-                    >
-                      <option value="virtual">Virtual</option>
-                      <option value="presencial">Presencial</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-bold text-emerald-900 mb-2">
-                      Link de Calendario (Google Meet, Zoom, etc.)
-                    </label>
-                    <input
-                      type="url"
-                      value={calendarLink}
-                      onChange={(e) => setCalendarLink(e.target.value)}
-                      disabled={isSubmitting}
-                      placeholder="https://..."
-                      className="w-full px-3 py-2 border border-emerald-300 rounded-lg text-sm bg-white focus:outline-emerald-600 disabled:opacity-60"
-                    />
-                  </div>
-
-
-                  <div className="flex gap-2 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedOutcome(null);
-                        setNote('');
-                      }}
-                      disabled={isSubmitting}
-                      className="flex-1 px-4 py-2 border border-emerald-300 rounded-lg text-emerald-900 hover:bg-emerald-100 transition-all disabled:opacity-50 font-semibold text-sm"
-                    >
-                      Volver
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleSuccess}
-                      disabled={isSubmitting}
-                      className="flex-1 px-4 py-2 bg-emerald-600 text-white rounded-lg font-semibold text-sm hover:bg-emerald-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-                    >
-                      {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : null}
-                      Confirmar Éxito
-                    </button>
-                  </div>
                 </div>
               )}
 
@@ -807,11 +693,54 @@ export default function ContactAttemptModal({
           )}
           </div>
 
-          {/* Right Panel: Notes & History */}
+          {/* Right Panel: Historial + Form */}
           <div className="w-80 bg-slate-50 p-4 flex flex-col border-l border-slate-200 overflow-hidden">
             <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 mb-3">
               Notas & Decisiones
             </h3>
+
+            {/* Tomador de Decisiones */}
+            <div className="mb-4 pb-4 border-b border-slate-200 space-y-2">
+              <p className="text-xs text-slate-400 font-semibold">Tomador de Decisiones</p>
+              {!isEditingResponsible ? (
+                <button
+                  onClick={() => {
+                    setIsEditingResponsible(true);
+                    setNewResponsible(assignedTo || '');
+                  }}
+                  className="px-3 py-1 bg-slate-800 hover:bg-slate-700 rounded text-sm font-semibold text-white w-full text-left"
+                >
+                  {assignedTo || '+ Asignar'}
+                </button>
+              ) : (
+                <div className="flex gap-1">
+                  <input
+                    type="text"
+                    value={newResponsible}
+                    onChange={(e) => setNewResponsible(e.target.value)}
+                    placeholder="Nombre del responsable"
+                    className="flex-1 px-2 py-1 rounded text-sm bg-slate-800 text-white placeholder-slate-500 focus:outline-slate-500"
+                    disabled={isSubmitting}
+                  />
+                  <button
+                    onClick={async () => {
+                      if (leadId && newResponsible.trim()) {
+                        await supabase
+                          .from('leads')
+                          .update({ assigned_to: newResponsible.trim() })
+                          .eq('id', leadId);
+                        setAssignedTo(newResponsible.trim());
+                      }
+                      setIsEditingResponsible(false);
+                    }}
+                    className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 rounded text-sm font-bold text-white disabled:opacity-50"
+                    disabled={isSubmitting}
+                  >
+                    ✓
+                  </button>
+                </div>
+              )}
+            </div>
 
             {/* Decision Makers Component */}
             <div className="mb-4 pb-4 border-b border-slate-200">
@@ -840,7 +769,7 @@ export default function ContactAttemptModal({
             )}
 
             {/* Attempt History */}
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto mb-4 pb-4 border-b border-slate-200">
               <h4 className="text-xs font-bold text-slate-600 mb-2">Intentos Previos</h4>
               {attemptNotes.length === 0 ? (
                 <p className="text-xs text-slate-400 text-center py-4">Sin intentos previos</p>
@@ -860,6 +789,7 @@ export default function ContactAttemptModal({
                 </div>
               )}
             </div>
+
           </div>
         </div>
       </div>
