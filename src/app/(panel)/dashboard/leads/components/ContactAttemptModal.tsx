@@ -103,6 +103,11 @@ export default function ContactAttemptModal({
   const [newPhone, setNewPhone] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [decisionMakers, setDecisionMakers] = useState<any[]>([]);
+  const [isAddingPhone, setIsAddingPhone] = useState(false);
+  const [newPhoneName, setNewPhoneName] = useState('');
+  const [newPhoneRole, setNewPhoneRole] = useState('');
+  const [newPhoneEmail, setNewPhoneEmail] = useState('');
+  const [phoneFormError, setPhoneFormError] = useState<string | null>(null);
 
   // Handle discard countdown
   useEffect(() => {
@@ -205,6 +210,45 @@ export default function ContactAttemptModal({
     setModality('virtual');
     setCalendarLink('');
     setError(null);
+  };
+
+  const savePhoneContact = () => {
+    setPhoneFormError(null);
+
+    // Validar que al menos teléfono o email esté rellenado
+    if (!newPhone.trim() && !newPhoneEmail.trim()) {
+      setPhoneFormError('Ingresa al menos un teléfono o email');
+      return;
+    }
+
+    // Validar que nombre y cargo sean obligatorios
+    if (!newPhoneName.trim()) {
+      setPhoneFormError('El nombre es obligatorio');
+      return;
+    }
+
+    if (!newPhoneRole.trim()) {
+      setPhoneFormError('El cargo es obligatorio');
+      return;
+    }
+
+    // Agregar a la lista de contactos
+    const newContact = {
+      phone: newPhone.trim() || null,
+      email: newPhoneEmail.trim() || null,
+      name: newPhoneName.trim(),
+      role: newPhoneRole.trim(),
+      source: 'manual',
+    };
+
+    setContactPhones([...contactPhones, newContact]);
+
+    // Limpiar el formulario
+    setNewPhone('');
+    setNewPhoneEmail('');
+    setNewPhoneName('');
+    setNewPhoneRole('');
+    setIsAddingPhone(false);
   };
 
   const saveAttemptNote = async (noteType: 'attempt' | 'success' | 'retry' | 'discard', qualifiedComment?: string) => {
@@ -612,49 +656,197 @@ export default function ContactAttemptModal({
                       </div>
                     )}
                   </div>
-                  <div className="space-y-3">
-                    {lead.phone && (
-                      <div>
-                        <div className="text-xs text-slate-600 mb-2 flex items-center gap-1">
-                          <Phone size={13} className="text-slate-400" />
-                          <span className="font-semibold">{lead.phone}</span>
-                        </div>
+                  {/* Llamadas Section */}
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-600 uppercase mb-3">Llamadas</h4>
+
+                    {/* Phone/Contact Grid Catalog */}
+                    <div className="grid grid-cols-4 gap-2 mb-3">
+                      {/* Inicial - Lead phone */}
+                      {lead.phone && (
                         <button
                           type="button"
-                          onClick={() => setCallAttempted(!callAttempted)}
-                          disabled={isSubmitting}
-                          className={`w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg font-semibold text-sm transition-all ${
-                            callAttempted
-                              ? 'bg-emerald-100 border-2 border-emerald-400 text-emerald-900'
-                              : 'bg-slate-100 border border-slate-200 text-slate-700 hover:bg-slate-200'
-                          } disabled:opacity-50`}
+                          onClick={() => window.location.href = `tel:${lead.phone}`}
+                          className="text-xs bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg p-2 text-left transition-all group"
                         >
-                          <Phone size={16} />
-                          {callAttempted ? '✓ Llamada Realizada' : 'Registrar Llamada'}
+                          <div className="font-semibold text-slate-900 group-hover:text-blue-600 flex items-center gap-1">
+                            <Phone size={12} />
+                            Inicial
+                          </div>
+                          <div className="text-slate-600 text-[10px] mt-0.5 font-semibold">{lead.phone}</div>
                         </button>
-                      </div>
-                    )}
-                    {lead.email && (
-                      <div>
-                        <div className="text-xs text-slate-600 mb-2 flex items-center gap-1">
-                          <Mail size={13} className="text-slate-400" />
-                          <span className="font-semibold truncate">{lead.email}</span>
-                        </div>
+                      )}
+
+                      {/* Saved Phones */}
+                      {contactPhones.map((phone, idx) => (
                         <button
-                          type="button"
-                          onClick={() => setEmailAttempted(!emailAttempted)}
-                          disabled={isSubmitting}
-                          className={`w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg font-semibold text-sm transition-all ${
-                            emailAttempted
-                              ? 'bg-emerald-100 border-2 border-emerald-400 text-emerald-900'
-                              : 'bg-slate-100 border border-slate-200 text-slate-700 hover:bg-slate-200'
-                          } disabled:opacity-50`}
+                          key={`contact-${idx}`}
+                          onClick={() => {
+                            if (phone.phone) window.location.href = `tel:${phone.phone}`;
+                            else if (phone.email) window.location.href = `mailto:${phone.email}`;
+                          }}
+                          className="text-xs bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg p-2 text-left transition-all group"
                         >
-                          <Mail size={16} />
-                          {emailAttempted ? '✓ Email Enviado' : 'Registrar Email'}
+                          <div className="font-semibold text-slate-900 group-hover:text-blue-600 truncate">{phone.name}</div>
+                          {phone.role && <div className="text-slate-600 text-[10px] truncate">{phone.role}</div>}
+                          <div className="flex items-center gap-1 mt-0.5">
+                            {phone.phone && (
+                              <>
+                                <Phone size={10} className="text-blue-400 flex-shrink-0" />
+                                <span className="text-[10px] font-semibold text-blue-600 truncate">{phone.phone}</span>
+                              </>
+                            )}
+                            {phone.email && !phone.phone && (
+                              <>
+                                <Mail size={10} className="text-blue-400 flex-shrink-0" />
+                                <span className="text-[10px] font-semibold text-blue-600 truncate">{phone.email}</span>
+                              </>
+                            )}
+                          </div>
                         </button>
+                      ))}
+
+                      {/* Decision Makers with Phone */}
+                      {decisionMakers.map((dm) =>
+                        dm.telefono ? (
+                          <button
+                            key={dm.id}
+                            onClick={() => window.location.href = `tel:${dm.telefono}`}
+                            className="text-xs bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg p-2 text-left transition-all group"
+                          >
+                            <div className="font-semibold text-slate-900 group-hover:text-blue-600 truncate">{dm.nombre}</div>
+                            {dm.cargo && <div className="text-slate-600 text-[10px] truncate">{dm.cargo}</div>}
+                            <div className="flex items-center gap-1 mt-0.5">
+                              <Phone size={10} className="text-blue-400 flex-shrink-0" />
+                              <span className="text-[10px] font-semibold text-blue-600 truncate">{dm.telefono}</span>
+                            </div>
+                          </button>
+                        ) : null
+                      )}
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex items-center justify-between gap-2 mb-3">
+                      {/* Add Phone - Left, Subtle Link Style */}
+                      <button
+                        type="button"
+                        onClick={() => setIsAddingPhone(!isAddingPhone)}
+                        disabled={isSubmitting}
+                        className="flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold text-slate-600 hover:text-blue-600 transition-all disabled:opacity-50"
+                      >
+                        +Agregar
+                      </button>
+
+                      {/* Register Call - Right, Prominent */}
+                      <button
+                        type="button"
+                        onClick={() => setCallAttempted(!callAttempted)}
+                        disabled={isSubmitting}
+                        className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg font-semibold text-sm transition-all ${
+                          callAttempted
+                            ? 'bg-emerald-100 border-2 border-emerald-400 text-emerald-900'
+                            : 'bg-slate-100 border border-slate-200 text-slate-700 hover:bg-slate-200'
+                        } disabled:opacity-50`}
+                      >
+                        <Phone size={16} />
+                        {callAttempted ? '✓ Realizada' : 'Registrar Llamada'}
+                      </button>
+                    </div>
+
+                    {/* Add Phone Form */}
+                    {isAddingPhone && (
+                      <div className="space-y-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                        {/* Row 1: Cargo 30%, Nombre 70% */}
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            placeholder="Cargo (Obligatorio)"
+                            value={newPhoneRole}
+                            onChange={(e) => setNewPhoneRole(e.target.value)}
+                            className="w-3/10 px-2 py-1.5 border border-slate-300 rounded text-xs"
+                          />
+                          <input
+                            type="text"
+                            placeholder="Nombre (Obligatorio)"
+                            value={newPhoneName}
+                            onChange={(e) => setNewPhoneName(e.target.value)}
+                            className="flex-1 px-2 py-1.5 border border-slate-300 rounded text-xs"
+                          />
+                        </div>
+
+                        {/* Row 2: Teléfono 50%, Email 50% */}
+                        <div className="flex gap-2">
+                          <input
+                            type="tel"
+                            placeholder="Teléfono (Opcional)"
+                            value={newPhone}
+                            onChange={(e) => setNewPhone(e.target.value)}
+                            className="flex-1 px-2 py-1.5 border border-slate-300 rounded text-xs"
+                          />
+                          <input
+                            type="email"
+                            placeholder="Email (Opcional)"
+                            value={newPhoneEmail}
+                            onChange={(e) => setNewPhoneEmail(e.target.value)}
+                            className="flex-1 px-2 py-1.5 border border-slate-300 rounded text-xs"
+                          />
+                        </div>
+                        {phoneFormError && (
+                          <div className="text-[10px] text-red-600 font-semibold">{phoneFormError}</div>
+                        )}
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsAddingPhone(false);
+                              setNewPhone('');
+                              setNewPhoneEmail('');
+                              setNewPhoneName('');
+                              setNewPhoneRole('');
+                              setPhoneFormError('');
+                            }}
+                            className="flex-1 px-2 py-1.5 bg-slate-100 text-slate-700 text-xs font-semibold rounded hover:bg-slate-200 transition-all"
+                          >
+                            Cancelar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={savePhoneContact}
+                            className="flex-1 px-2 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded hover:bg-blue-700 transition-all"
+                          >
+                            Guardar
+                          </button>
+                        </div>
                       </div>
                     )}
+                  </div>
+
+                  {/* Emails Section */}
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-600 uppercase mb-3">Emails</h4>
+                    <div className="space-y-3">
+                      {lead.email && (
+                        <div>
+                          <div className="text-xs text-slate-600 mb-2 flex items-center gap-1">
+                            <Mail size={13} className="text-slate-400" />
+                            <span className="font-semibold truncate">{lead.email}</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setEmailAttempted(!emailAttempted)}
+                            disabled={isSubmitting}
+                            className={`w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg font-semibold text-sm transition-all ${
+                              emailAttempted
+                                ? 'bg-emerald-100 border-2 border-emerald-400 text-emerald-900'
+                                : 'bg-slate-100 border border-slate-200 text-slate-700 hover:bg-slate-200'
+                            } disabled:opacity-50`}
+                          >
+                            <Mail size={16} />
+                            {emailAttempted ? '✓ Email Enviado' : 'Registrar Email'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
