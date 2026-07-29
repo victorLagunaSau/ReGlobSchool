@@ -92,7 +92,21 @@ export default function ContactAttemptModal({
   const [isEditingResponsible, setIsEditingResponsible] = useState(false);
   const [newResponsible, setNewResponsible] = useState('');
   const [attemptNotes, setAttemptNotes] = useState<any[]>([]);
+  const [discardCountdown, setDiscardCountdown] = useState(5);
   const commentRef = useRef<HTMLTextAreaElement>(null);
+
+  // Handle discard countdown
+  useEffect(() => {
+    if (selectedOutcome !== 'descartar') {
+      setDiscardCountdown(5);
+      return;
+    }
+
+    if (discardCountdown > 0) {
+      const timer = setTimeout(() => setDiscardCountdown(discardCountdown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [selectedOutcome, discardCountdown]);
 
   // Fetch current pending task
   useEffect(() => {
@@ -700,19 +714,7 @@ export default function ContactAttemptModal({
               {/* Discard Flow */}
               {selectedOutcome === 'descartar' && (
                 <div className="space-y-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-bold text-red-900">Descartar Lead</h3>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedOutcome(null);
-                        setNote('');
-                      }}
-                      className="text-red-600 hover:text-red-800 text-xs font-bold"
-                    >
-                      Cambiar
-                    </button>
-                  </div>
+                  <h3 className="font-bold text-red-900">Descartar Lead</h3>
 
                   <div className="bg-red-100 border border-red-300 rounded p-2 text-xs text-red-900">
                     Esta acción moverá el lead a estado "Descartado". No se puede deshacer.
@@ -724,20 +726,22 @@ export default function ContactAttemptModal({
                       onClick={() => {
                         setSelectedOutcome(null);
                         setNote('');
+                        setDiscardCountdown(5);
                       }}
                       disabled={isSubmitting}
-                      className="flex-1 px-4 py-2 border border-red-300 rounded-lg text-red-900 hover:bg-red-100 transition-all disabled:opacity-50 font-semibold text-sm"
+                      className="px-3 py-2 border border-red-300 rounded-lg text-red-900 hover:bg-red-100 transition-all disabled:opacity-50 font-semibold text-xs"
                     >
-                      Volver
+                      Cancelar
                     </button>
+                    <div className="flex-1" />
                     <button
                       type="button"
                       onClick={handleDescartar}
-                      disabled={isSubmitting}
-                      className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg font-semibold text-sm hover:bg-red-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                      disabled={isSubmitting || discardCountdown > 0}
+                      className="px-4 py-2 bg-red-600 text-white rounded-lg font-semibold text-sm hover:bg-red-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                     >
                       {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : null}
-                      Descartar Lead
+                      {discardCountdown > 0 ? `Descartar en ${discardCountdown}s` : 'Descartar Lead'}
                     </button>
                   </div>
                 </div>
