@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { supabase } from '../../../../../lib/supabase/client';
-import { Search, MapPin, Phone, Mail, Globe, Maximize2, Calendar } from 'lucide-react';
+import { Search, MapPin, Phone, Mail, Globe, Maximize2, Calendar, Info } from 'lucide-react';
 import { scoreStyle } from '../../../../../lib/lead-score';
 import StageModalRouter from './StageModalRouter';
 import type { LeadRow, StateRow, PipelineStage, DEFAULT_LEAD_STATUSES } from '../page';
@@ -17,11 +17,19 @@ interface LeadsKanbanProps {
 }
 
 const COLUMN_ACCENTS: Record<string, string> = {
-  prospecto: 'border-t-slate-400',
-  llamada: 'border-t-amber-400',
-  negociacion: 'border-t-blue-500',
-  sociedad_comercial: 'border-t-emerald-500',
+  prospecto: 'border-t-emerald-300',
+  llamada: 'border-t-emerald-400',
+  negociacion: 'border-t-emerald-600',
+  sociedad_comercial: 'border-t-emerald-700',
   descartado: 'border-t-rose-400',
+};
+
+const COLUMN_DESCRIPTIONS: Record<string, string> = {
+  prospecto: 'Potenciales clientes a los que aún no hemos contactado',
+  llamada: 'Clientes con los que hemos establecido contacto inicial',
+  negociacion: 'En demostración y evaluación de nuestros servicios',
+  sociedad_comercial: 'Acuerdos cerrados y asociaciones establecidas',
+  descartado: 'Clientes descartados o sin interés',
 };
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -103,24 +111,35 @@ export default function LeadsKanban({ leads, states, stages, onRefresh }: LeadsK
 
   return (
     <div className="space-y-4 animate-fade-in">
-      <div className="flex flex-col sm:flex-row gap-3 bg-white p-3 rounded-xl border border-slate-200">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
-          <input
-            className="w-full pl-9 py-2 text-xs border rounded-lg"
-            placeholder="Buscar por negocio o giro..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-bold text-slate-900">Filtros y Búsqueda</h3>
+          <div className="group relative">
+            <Info size={16} className="text-slate-400 cursor-help hover:text-slate-600" />
+            <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block bg-slate-900 text-white text-xs rounded-lg px-3 py-2 whitespace-nowrap z-50">
+              Busca por nombre de negocio o giro comercial, filtra por estado
+            </div>
+          </div>
         </div>
-        <select
-          className="text-xs border rounded-lg px-3 bg-white"
-          value={filterState}
-          onChange={(e) => setFilterState(e.target.value)}
-        >
-          <option value="">Todos los Estados (geo)</option>
-          {states.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-        </select>
+        <div className="flex flex-col sm:flex-row gap-3 bg-white p-3 rounded-xl border border-slate-200">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
+            <input
+              className="w-full pl-9 py-2 text-xs border rounded-lg"
+              placeholder="Buscar por negocio o giro..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          <select
+            className="text-xs border rounded-lg px-3 bg-white"
+            value={filterState}
+            onChange={(e) => setFilterState(e.target.value)}
+          >
+            <option value="">Todos los Estados (geo)</option>
+            {states.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        </div>
       </div>
 
       <div className="flex gap-4 overflow-x-auto pb-4">
@@ -133,8 +152,16 @@ export default function LeadsKanban({ leads, states, stages, onRefresh }: LeadsK
             className={`shrink-0 w-72 rounded-2xl border-t-4 ${COLUMN_ACCENTS[col.value]} bg-slate-50/60 transition-colors ${dragOverStatus === col.value ? 'bg-blue-50 ring-2 ring-blue-200' : ''}`}
           >
             <div className="flex items-center justify-between px-3 py-2.5">
-              <h3 className="text-xs font-black uppercase tracking-wider text-slate-700">{col.label}</h3>
-              <span className="text-[10px] font-bold text-slate-400 bg-white px-2 py-0.5 rounded-full border border-slate-200">{col.leads.length}</span>
+              <div className="flex items-center gap-1.5 flex-1">
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-700">{col.label}</h3>
+                <div className="group relative">
+                  <Info size={13} className="text-slate-400 cursor-help hover:text-slate-600 flex-shrink-0" />
+                  <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block bg-slate-900 text-white text-xs rounded-lg px-3 py-2 whitespace-normal z-50 w-48">
+                    {COLUMN_DESCRIPTIONS[col.value] || 'Etapa del pipeline'}
+                  </div>
+                </div>
+              </div>
+              <span className="text-[10px] font-bold text-slate-400 bg-white px-2 py-0.5 rounded-full border border-slate-200 flex-shrink-0">{col.leads.length}</span>
             </div>
 
             <div className="px-2 pb-2 space-y-2 min-h-[80px]">
