@@ -588,7 +588,7 @@ export default function ContactAttemptModal({
                       type="button"
                       onClick={() => setSelectedOutcome('exito')}
                       disabled={isSubmitting}
-                      className="flex items-center justify-center gap-2 px-3 py-3 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-lg hover:bg-emerald-100 transition-all font-semibold text-sm disabled:opacity-50"
+                      className="flex items-center justify-center gap-2 px-3 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all font-semibold text-sm disabled:opacity-50"
                     >
                       <CheckCircle2 size={18} />
                       Éxito
@@ -598,7 +598,7 @@ export default function ContactAttemptModal({
                         type="button"
                         onClick={() => setSelectedOutcome('reintentar')}
                         disabled={isSubmitting}
-                        className="flex items-center justify-center gap-2 px-3 py-3 bg-slate-100 border border-slate-200 text-slate-900 rounded-lg hover:bg-slate-200 transition-all font-semibold text-sm disabled:opacity-50"
+                        className="flex items-center justify-center gap-2 px-3 py-3 bg-slate-500 text-white rounded-lg hover:bg-slate-600 transition-all font-semibold text-sm disabled:opacity-50"
                       >
                         <RotateCcw size={18} />
                         Reintentar
@@ -610,8 +610,8 @@ export default function ContactAttemptModal({
                       disabled={!canDiscard || isSubmitting}
                       className={`flex items-center justify-center gap-2 px-3 py-3 rounded-lg font-semibold text-sm transition-all ${
                         canDiscard
-                          ? 'bg-red-50 border border-red-200 text-red-900 hover:bg-red-100'
-                          : 'bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed'
+                          ? 'bg-red-600 text-white hover:bg-red-700'
+                          : 'bg-slate-200 text-slate-400 cursor-not-allowed'
                       } disabled:opacity-50`}
                     >
                       <Trash2 size={18} />
