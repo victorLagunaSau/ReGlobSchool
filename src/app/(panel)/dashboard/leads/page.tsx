@@ -72,6 +72,8 @@ export interface LeadRow {
   created_at: string;
   zone_city: string | null;
   state_name: string | null;
+  is_discarded?: boolean;
+  discarded_at?: string | null;
 }
 
 export default function LeadsPage() {

@@ -168,10 +168,14 @@ export default function LeadsKanban({ leads, states, stages, onRefresh }: LeadsK
               {col.leads.map((lead) => (
                 <div
                   key={lead.id}
-                  draggable
+                  draggable={!lead.is_discarded}
                   onDragStart={() => setDraggedId(lead.id)}
                   onDragEnd={() => setDraggedId(null)}
-                  className={`bg-white border border-slate-200 rounded-xl p-3 shadow-sm hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing space-y-1.5 ${draggedId === lead.id ? 'opacity-40' : ''}`}
+                  className={`bg-white border rounded-xl p-3 shadow-sm hover:shadow-md transition-all space-y-1.5 ${
+                    lead.is_discarded
+                      ? 'border-red-200 opacity-60 cursor-not-allowed'
+                      : 'border-slate-200 cursor-grab active:cursor-grabbing'
+                  } ${draggedId === lead.id ? 'opacity-40' : ''}`}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 flex items-start gap-1.5">
@@ -187,6 +191,11 @@ export default function LeadsKanban({ leads, states, stages, onRefresh }: LeadsK
                       </button>
                     </div>
                     <div className="flex items-center gap-1 flex-shrink-0">
+                      {lead.is_discarded && (
+                        <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-red-100 text-red-700 uppercase" title="Lead descartado">
+                          Descartado
+                        </span>
+                      )}
                       {(lead as any).statusReset && (
                         <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-orange-100 text-orange-700 uppercase" title="Ficha reiniciada a la etapa inicial">
                           Reiniciada

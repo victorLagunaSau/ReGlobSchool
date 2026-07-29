@@ -196,10 +196,11 @@ export async function resolveTaskWithPipeline(
 
       if (leadError) throw leadError;
     } else if (resolution === 'descartar') {
-      // Move lead to descartado and archive
+      // Mark lead as discarded but preserve its current stage for analysis
+      // This allows tracking at which stage leads are being lost
       const { error: leadError } = await supabase
         .from('leads')
-        .update({ status: 'descartado' })
+        .update({ is_discarded: true, discarded_at: now, discard_reason: note.trim() })
         .eq('id', task.lead_id);
 
       if (leadError) throw leadError;
