@@ -154,7 +154,9 @@ export default function ReunionModal({
               <h2 className="text-lg font-bold">
                 {step === 'calendar' ? 'Calendarizar Reunión' : 'Contexto de Reunión'}
               </h2>
-              <p className="text-xs text-slate-300 mt-1">Etapa 3 - Reunión de Demostración</p>
+              <p className="text-xs text-slate-300 mt-1">
+                Etapa {stage?.orden} {stage?.tipo && `- Tipo: ${stage.tipo.charAt(0).toUpperCase() + stage.tipo.slice(1)}`}
+              </p>
             </div>
             <button
               onClick={onClose}

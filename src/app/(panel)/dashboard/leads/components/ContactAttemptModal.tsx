@@ -334,6 +334,9 @@ export default function ContactAttemptModal({
               {lead && (
                 <>
                   <h2 className="text-lg font-bold">{lead.business_name}</h2>
+                  <p className="text-xs text-slate-300 mt-1">
+                    Etapa {stages?.[0]?.orden} {stages?.[0]?.tipo && `- Tipo: ${stages[0].tipo.charAt(0).toUpperCase() + stages[0].tipo.slice(1)}`}
+                  </p>
                   <p className="text-sm text-slate-400 mt-1">
                     {lead.zone_city && `${lead.zone_city}, `}
                     {lead.state_name && `${lead.state_name}`}
