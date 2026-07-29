@@ -108,6 +108,12 @@ export default function ContactAttemptModal({
   const [newPhoneRole, setNewPhoneRole] = useState('');
   const [newPhoneEmail, setNewPhoneEmail] = useState('');
   const [phoneFormError, setPhoneFormError] = useState<string | null>(null);
+  const [isAddingEmail, setIsAddingEmail] = useState(false);
+  const [newEmailName, setNewEmailName] = useState('');
+  const [newEmailRole, setNewEmailRole] = useState('');
+  const [newEmailValue, setNewEmailValue] = useState('');
+  const [newEmailPhone, setNewEmailPhone] = useState('');
+  const [emailFormError, setEmailFormError] = useState<string | null>(null);
 
   // Handle discard countdown
   useEffect(() => {
@@ -249,6 +255,45 @@ export default function ContactAttemptModal({
     setNewPhoneName('');
     setNewPhoneRole('');
     setIsAddingPhone(false);
+  };
+
+  const saveEmailContact = () => {
+    setEmailFormError(null);
+
+    // Validar que al menos teléfono o email esté rellenado
+    if (!newEmailValue.trim() && !newEmailPhone.trim()) {
+      setEmailFormError('Ingresa al menos un teléfono o email');
+      return;
+    }
+
+    // Validar que nombre y cargo sean obligatorios
+    if (!newEmailName.trim()) {
+      setEmailFormError('El nombre es obligatorio');
+      return;
+    }
+
+    if (!newEmailRole.trim()) {
+      setEmailFormError('El cargo es obligatorio');
+      return;
+    }
+
+    // Agregar a la lista de contactos
+    const newContact = {
+      email: newEmailValue.trim() || null,
+      phone: newEmailPhone.trim() || null,
+      name: newEmailName.trim(),
+      role: newEmailRole.trim(),
+      source: 'manual',
+    };
+
+    setContactEmails([...contactEmails, newContact]);
+
+    // Limpiar el formulario
+    setNewEmailValue('');
+    setNewEmailPhone('');
+    setNewEmailName('');
+    setNewEmailRole('');
+    setIsAddingEmail(false);
   };
 
   const saveAttemptNote = async (noteType: 'attempt' | 'success' | 'retry' | 'discard', qualifiedComment?: string) => {
@@ -646,16 +691,20 @@ export default function ContactAttemptModal({
 
               {/* Action Buttons - Only for contacto type */}
               {stages?.[0]?.tipo === 'contacto' && (
-                <div className="space-y-3 bg-slate-50 p-4 rounded-lg border border-slate-200">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs font-bold text-slate-600 uppercase">Acciones de Contacto</p>
-                    {(callAttempted || emailAttempted) && (
-                      <div className="flex gap-1 text-xs">
-                        {callAttempted && <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded font-bold flex items-center gap-1"><Phone size={10} />✓</span>}
-                        {emailAttempted && <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded font-bold flex items-center gap-1"><Mail size={10} />✓</span>}
-                      </div>
-                    )}
-                  </div>
+                <>
+                  {/* Section Title - Larger & Outside */}
+                  <div className="mb-4">
+                  <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide">Acciones de Contacto</h3>
+                  {(callAttempted || emailAttempted) && (
+                    <div className="flex gap-2 mt-2">
+                      {callAttempted && <span className="px-2.5 py-1 bg-emerald-100 text-emerald-700 rounded-lg font-bold text-xs flex items-center gap-1"><Phone size={12} />✓ Llamada</span>}
+                      {emailAttempted && <span className="px-2.5 py-1 bg-emerald-100 text-emerald-700 rounded-lg font-bold text-xs flex items-center gap-1"><Mail size={12} />✓ Email</span>}
+                    </div>
+                  )}
+                </div>
+
+                {/* Llamadas Section - Separate Card */}
+                <div className="space-y-3 bg-white p-4 rounded-lg border border-slate-200 mb-4">
                   {/* Llamadas Section */}
                   <div>
                     <h4 className="text-xs font-bold text-slate-600 uppercase mb-3">Llamadas</h4>
@@ -820,100 +869,158 @@ export default function ContactAttemptModal({
                       </div>
                     )}
                   </div>
+                </div>
 
-                  {/* Emails Section */}
+                {/* Emails Section - Separate Card */}
+                <div className="space-y-3 bg-white p-4 rounded-lg border border-slate-200">
                   <div>
                     <h4 className="text-xs font-bold text-slate-600 uppercase mb-3">Emails</h4>
-                    <div className="space-y-3">
+
+                    {/* Email Catalog Grid - 3 per row */}
+                    <div className="grid grid-cols-3 gap-2 mb-3">
                       {lead.email && (
-                        <div>
-                          <div className="text-xs text-slate-600 mb-2 flex items-center gap-1">
-                            <Mail size={13} className="text-slate-400" />
-                            <span className="font-semibold truncate">{lead.email}</span>
-                          </div>
+                        <button
+                          type="button"
+                          onClick={() => window.location.href = `mailto:${lead.email}`}
+                          className="p-2 bg-slate-100 border border-slate-200 rounded-lg hover:bg-slate-200 transition-all text-left space-y-1 group"
+                          title="Enviar email"
+                        >
+                          <div className="text-[10px] font-semibold text-slate-700 truncate">Inicial</div>
+                          <div className="text-[10px] text-slate-600 truncate group-hover:text-blue-600">{lead.email}</div>
+                        </button>
+                      )}
+                      {contactEmails.map((contact, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => window.location.href = contact.email ? `mailto:${contact.email}` : contact.phone ? `tel:${contact.phone}` : '#'}
+                          className="p-2 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-all text-left space-y-1 group"
+                          title={`${contact.name} - ${contact.role}`}
+                        >
+                          <div className="text-[10px] font-semibold text-slate-700 truncate">{contact.name}</div>
+                          <div className="text-[10px] text-slate-600 truncate">{contact.role}</div>
+                          {contact.email && (
+                            <div className="text-[10px] text-slate-600 truncate group-hover:text-blue-600">{contact.email}</div>
+                          )}
+                          {contact.phone && (
+                            <div className="text-[10px] text-slate-600 truncate group-hover:text-blue-600">{contact.phone}</div>
+                          )}
+                        </button>
+                      ))}
+
+                      {/* Decision Makers with Email */}
+                      {decisionMakers.map((dm) =>
+                        dm.email ? (
                           <button
-                            type="button"
-                            onClick={() => setEmailAttempted(!emailAttempted)}
-                            disabled={isSubmitting}
-                            className={`w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg font-semibold text-sm transition-all ${
-                              emailAttempted
-                                ? 'bg-emerald-100 border-2 border-emerald-400 text-emerald-900'
-                                : 'bg-slate-100 border border-slate-200 text-slate-700 hover:bg-slate-200'
-                            } disabled:opacity-50`}
+                            key={dm.id}
+                            onClick={() => window.location.href = `mailto:${dm.email}`}
+                            className="p-2 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-all text-left space-y-1 group"
+                            title={`${dm.nombre} - ${dm.cargo}`}
                           >
-                            <Mail size={16} />
-                            {emailAttempted ? '✓ Email Enviado' : 'Registrar Email'}
+                            <div className="text-[10px] font-semibold text-slate-700 truncate">{dm.nombre}</div>
+                            {dm.cargo && <div className="text-[10px] text-slate-600 truncate">{dm.cargo}</div>}
+                            <div className="text-[10px] text-slate-600 truncate group-hover:text-blue-600">{dm.email}</div>
                           </button>
-                        </div>
+                        ) : null
                       )}
                     </div>
-                  </div>
-                </div>
-              )}
 
-              {/* Dynamic Contacts Section - Only for contacto type */}
-              {stages?.[0]?.tipo === 'contacto' && (
-                <div className="space-y-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                  <h3 className="text-sm font-bold text-slate-900">Contactos Disponibles</h3>
+                    {/* Action Buttons */}
+                    <div className="flex items-center justify-between gap-2 mb-3">
+                      {/* Add Email - Left, Subtle Link Style */}
+                      <button
+                        type="button"
+                        onClick={() => setIsAddingEmail(!isAddingEmail)}
+                        disabled={isSubmitting}
+                        className="flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold text-slate-600 hover:text-blue-600 transition-all disabled:opacity-50"
+                      >
+                        +Agregar
+                      </button>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    {/* Phones */}
-                    <div className="space-y-2">
-                      <label className="block text-xs font-bold text-slate-700">Teléfonos</label>
-                      <div className="space-y-1">
-                        {lead?.phone && (
-                          <a href={`tel:${lead.phone}`} className="block px-2 py-1.5 bg-white border border-slate-200 rounded text-xs text-blue-600 hover:bg-blue-50 transition-all truncate">
-                            📞 {lead.phone}
-                          </a>
-                        )}
-                        {decisionMakers.map((dm) =>
-                          dm.telefono && (
-                            <a key={dm.id} href={`tel:${dm.telefono}`} className="block px-2 py-1.5 bg-white border border-slate-200 rounded text-xs text-blue-600 hover:bg-blue-50 transition-all truncate" title={dm.nombre}>
-                              📞 {dm.nombre}
-                            </a>
-                          )
-                        )}
-                        {contactPhones.map((phone, idx) => (
-                          <a key={idx} href={`tel:${phone.value}`} className="block px-2 py-1.5 bg-white border border-slate-200 rounded text-xs text-blue-600 hover:bg-blue-50 transition-all">
-                            📞 {phone.value}
-                          </a>
-                        ))}
-                      </div>
-                      <div className="flex gap-1">
-                        <input type="tel" value={newPhone} onChange={(e) => setNewPhone(e.target.value)} placeholder="Agregar..." className="flex-1 px-2 py-1 border border-slate-300 rounded text-xs" />
-                        <button onClick={() => addContactPhone(newPhone)} className="px-2 py-1 bg-blue-600 text-white text-xs font-semibold rounded hover:bg-blue-700">+</button>
-                      </div>
+                      {/* Register Email - Right, Prominent */}
+                      <button
+                        type="button"
+                        onClick={() => setEmailAttempted(!emailAttempted)}
+                        disabled={isSubmitting}
+                        className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg font-semibold text-sm transition-all ${
+                          emailAttempted
+                            ? 'bg-emerald-100 border-2 border-emerald-400 text-emerald-900'
+                            : 'bg-slate-100 border border-slate-200 text-slate-700 hover:bg-slate-200'
+                        } disabled:opacity-50`}
+                      >
+                        <Mail size={16} />
+                        {emailAttempted ? '✓ Enviado' : 'Registrar Email'}
+                      </button>
                     </div>
 
-                    {/* Emails */}
-                    <div className="space-y-2">
-                      <label className="block text-xs font-bold text-slate-700">Emails</label>
-                      <div className="space-y-1">
-                        {lead?.email && (
-                          <a href={`mailto:${lead.email}`} className="block px-2 py-1.5 bg-white border border-slate-200 rounded text-xs text-blue-600 hover:bg-blue-50 transition-all truncate">
-                            ✉️ {lead.email}
-                          </a>
+                    {/* Add Email Form */}
+                    {isAddingEmail && (
+                      <div className="space-y-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                        {/* Row 1: Cargo 30%, Nombre 70% */}
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            placeholder="Cargo (Obligatorio)"
+                            value={newEmailRole}
+                            onChange={(e) => setNewEmailRole(e.target.value)}
+                            className="w-3/10 px-2 py-1.5 border border-slate-300 rounded text-xs"
+                          />
+                          <input
+                            type="text"
+                            placeholder="Nombre (Obligatorio)"
+                            value={newEmailName}
+                            onChange={(e) => setNewEmailName(e.target.value)}
+                            className="flex-1 px-2 py-1.5 border border-slate-300 rounded text-xs"
+                          />
+                        </div>
+
+                        {/* Row 2: Teléfono 50%, Email 50% */}
+                        <div className="flex gap-2">
+                          <input
+                            type="tel"
+                            placeholder="Teléfono (Opcional)"
+                            value={newEmailPhone}
+                            onChange={(e) => setNewEmailPhone(e.target.value)}
+                            className="flex-1 px-2 py-1.5 border border-slate-300 rounded text-xs"
+                          />
+                          <input
+                            type="email"
+                            placeholder="Email (Opcional)"
+                            value={newEmailValue}
+                            onChange={(e) => setNewEmailValue(e.target.value)}
+                            className="flex-1 px-2 py-1.5 border border-slate-300 rounded text-xs"
+                          />
+                        </div>
+                        {emailFormError && (
+                          <div className="text-[10px] text-red-600 font-semibold">{emailFormError}</div>
                         )}
-                        {decisionMakers.map((dm) =>
-                          dm.email && (
-                            <a key={dm.id} href={`mailto:${dm.email}`} className="block px-2 py-1.5 bg-white border border-slate-200 rounded text-xs text-blue-600 hover:bg-blue-50 transition-all truncate" title={dm.nombre}>
-                              ✉️ {dm.nombre}
-                            </a>
-                          )
-                        )}
-                        {contactEmails.map((email, idx) => (
-                          <a key={idx} href={`mailto:${email.value}`} className="block px-2 py-1.5 bg-white border border-slate-200 rounded text-xs text-blue-600 hover:bg-blue-50 transition-all">
-                            ✉️ {email.value}
-                          </a>
-                        ))}
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsAddingEmail(false);
+                              setNewEmailValue('');
+                              setNewEmailPhone('');
+                              setNewEmailName('');
+                              setNewEmailRole('');
+                              setEmailFormError('');
+                            }}
+                            className="flex-1 px-2 py-1.5 bg-slate-100 text-slate-700 text-xs font-semibold rounded hover:bg-slate-200 transition-all"
+                          >
+                            Cancelar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={saveEmailContact}
+                            className="flex-1 px-2 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded hover:bg-blue-700 transition-all"
+                          >
+                            Guardar
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex gap-1">
-                        <input type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="Agregar..." className="flex-1 px-2 py-1 border border-slate-300 rounded text-xs" />
-                        <button onClick={() => addContactEmail(newEmail)} className="px-2 py-1 bg-blue-600 text-white text-xs font-semibold rounded hover:bg-blue-700">+</button>
-                      </div>
-                    </div>
+                    )}
                   </div>
                 </div>
+                </>
               )}
 
               {/* Progress bar with information - After actions */}
