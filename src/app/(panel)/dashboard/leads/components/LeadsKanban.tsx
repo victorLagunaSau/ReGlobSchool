@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { supabase } from '../../../../../lib/supabase/client';
 import { Search, MapPin, Phone, Mail, Globe, Maximize2, Calendar, Info } from 'lucide-react';
 import { scoreStyle } from '../../../../../lib/lead-score';
-import StageModalRouter from './StageModalRouter';
+import StageNavigatorModal from './StageNavigatorModal';
 import type { LeadRow, StateRow, PipelineStage, DEFAULT_LEAD_STATUSES } from '../page';
 import { DEFAULT_LEAD_STATUSES as DEFAULTS } from '../page';
 
@@ -277,23 +277,18 @@ export default function LeadsKanban({ leads, states, stages, onRefresh }: LeadsK
         ))}
       </div>
 
-      {selectedLeadId && selectedStageType && (
-        <StageModalRouter
-          stageType={selectedStageType}
+      {selectedLeadId && (
+        <StageNavigatorModal
           leadId={selectedLeadId}
           lead={selectedLeadId ? (leads.find(l => l.id === selectedLeadId) as any) : null}
-          stage={stages.find(s => s.tipo === selectedStageType) || null}
+          stages={stages}
           isOpen={isStageModalOpen}
           onClose={() => {
             setIsStageModalOpen(false);
             setSelectedLeadId(null);
             setSelectedStageType(null);
           }}
-          onSuccess={onRefresh}
-          onSuccessWithNextStage={(nextStageType: string) => {
-            setSelectedStageType(nextStageType);
-            onRefresh();
-          }}
+          onRefresh={onRefresh}
         />
       )}
     </div>

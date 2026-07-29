@@ -22,7 +22,7 @@ interface ContactAttemptModalProps {
     country_name: string | null;
     created_at: string;
   } | null;
-  stages: Array<{ id: string; clave: string; titulo: string; orden: number; siguiente_etapa_id?: string | null; continuar_a_id?: string | null }>;
+  stages: Array<{ id: string; clave: string; titulo: string; orden: number; tipo?: string; siguiente_etapa_id?: string | null }>;
   onClose: () => void;
   onTaskResolved?: () => void;
   onSuccessWithNextStage?: (nextStageType: string) => void;
@@ -185,7 +185,7 @@ export default function ContactAttemptModal({
       }
 
       const currentStage = stages[0];
-      const nextStageId = currentStage?.continuar_a_id || currentStage?.siguiente_etapa_id;
+      const nextStageId = currentStage?.siguiente_etapa_id;
       const nextStage = nextStageId
         ? allStages.find(s => s.id === nextStageId)
         : allStages.find(s => s.orden === (currentStage?.orden || 2) + 1);
@@ -229,10 +229,12 @@ export default function ContactAttemptModal({
       );
 
       resetForm();
-      onClose();
-      // Auto-open next stage modal
+      // Auto-open next stage modal (no close - transition within modal)
       if (nextStage?.tipo) {
         onSuccessWithNextStage?.(nextStage.tipo);
+      } else {
+        // If no next stage, close the modal
+        onClose();
       }
       onTaskResolved?.();
     } catch (err) {
@@ -370,12 +372,6 @@ export default function ContactAttemptModal({
             </div>
           )}
 
-          {error && !loading && (
-            <div className="flex gap-2 items-start bg-red-50 border border-red-200 rounded-lg p-3">
-              <AlertCircle size={16} className="text-red-600 flex-shrink-0 mt-0.5" />
-              <p className="text-xs text-red-600">{error}</p>
-            </div>
-          )}
 
           {!loading && lead && (
             <>
@@ -701,62 +697,19 @@ export default function ContactAttemptModal({
 
           {/* Right Panel: Historial + Form */}
           <div className="w-80 bg-slate-50 p-4 flex flex-col border-l border-slate-200 overflow-hidden">
-            <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 mb-3">
-              Notas & Decisiones
-            </h3>
-
-            {/* Tomador de Decisiones */}
-            <div className="mb-4 pb-4 border-b border-slate-200 space-y-2">
-              <p className="text-xs text-slate-400 font-semibold">Tomador de Decisiones</p>
-              {!isEditingResponsible ? (
-                <button
-                  onClick={() => {
-                    setIsEditingResponsible(true);
-                    setNewResponsible(assignedTo || '');
-                  }}
-                  className="px-3 py-1 bg-slate-800 hover:bg-slate-700 rounded text-sm font-semibold text-white w-full text-left"
-                >
-                  {assignedTo || '+ Asignar'}
-                </button>
-              ) : (
-                <div className="flex gap-1">
-                  <input
-                    type="text"
-                    value={newResponsible}
-                    onChange={(e) => setNewResponsible(e.target.value)}
-                    placeholder="Nombre del responsable"
-                    className="flex-1 px-2 py-1 rounded text-sm bg-slate-800 text-white placeholder-slate-500 focus:outline-slate-500"
-                    disabled={isSubmitting}
-                  />
-                  <button
-                    onClick={async () => {
-                      if (leadId && newResponsible.trim()) {
-                        await supabase
-                          .from('leads')
-                          .update({ assigned_to: newResponsible.trim() })
-                          .eq('id', leadId);
-                        setAssignedTo(newResponsible.trim());
-                      }
-                      setIsEditingResponsible(false);
-                    }}
-                    className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 rounded text-sm font-bold text-white disabled:opacity-50"
-                    disabled={isSubmitting}
-                  >
-                    ✓
-                  </button>
-                </div>
-              )}
-            </div>
-
             {/* Decision Makers Component */}
             <div className="mb-4 pb-4 border-b border-slate-200">
               {leadId && <DecisionMakersForm leadId={leadId} />}
             </div>
 
+            <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 mb-3">
+              Notas & Decisiones
+            </h3>
+
             {/* Notes Input - Always visible */}
             <div className="mb-4 pb-4 border-b border-slate-200">
               <label className="block text-xs font-bold text-slate-700 mb-2">
-                Comentarios <span className="text-red-500">*</span>
+                Comentarios <span className="text-slate-400">*</span>
               </label>
               <textarea
                 value={note}
@@ -770,26 +723,39 @@ export default function ContactAttemptModal({
               <p className="text-[10px] text-slate-600 mt-1">
                 {note.length}/500 (mínimo 10)
               </p>
+              {error && !loading && (
+                <div className="flex gap-2 items-start bg-red-50 border border-red-200 rounded-lg p-3 mt-2">
+                  <AlertCircle size={16} className="text-red-600 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs text-red-600">{error}</p>
+                </div>
+              )}
             </div>
 
-            {/* Attempt History */}
-            <div className="flex-1 overflow-y-auto mb-4 pb-4 border-b border-slate-200">
-              <h4 className="text-xs font-bold text-slate-600 mb-2">Intentos Previos</h4>
+            {/* Attempt History - Chronological order */}
+            <div className="flex-1 overflow-y-auto">
               {attemptNotes.length === 0 ? (
-                <p className="text-xs text-slate-400 text-center py-4">Sin intentos previos</p>
+                <p className="text-xs text-slate-400 text-center py-4">Sin historial</p>
               ) : (
                 <div className="space-y-2">
-                  {attemptNotes.map((note) => (
-                    <div key={note.id} className="bg-white rounded-lg p-2 border border-slate-200">
-                      <p className="text-[10px] font-bold text-slate-800">
-                        Intento {note.attempt_number}
-                      </p>
-                      <p className="text-[10px] text-slate-700 mt-1">{note.note_text}</p>
-                      <p className="text-[9px] text-slate-400 mt-1">
-                        {new Date(note.created_at).toLocaleDateString('es-MX')}
-                      </p>
-                    </div>
-                  ))}
+                  {attemptNotes.map((note) => {
+                    const isSuccess = note.note_type === 'success';
+                    const bgColor = isSuccess ? 'bg-emerald-50' : 'bg-white';
+                    const borderColor = isSuccess ? 'border-emerald-200' : 'border-slate-200';
+                    const textColor = isSuccess ? 'text-emerald-900' : 'text-slate-700';
+                    const dateColor = isSuccess ? 'text-emerald-600' : 'text-slate-400';
+
+                    return (
+                      <div key={note.id} className={`${bgColor} rounded-lg p-2 border ${borderColor}`}>
+                        <p className={`text-[10px] font-bold ${textColor}`}>
+                          Intento {note.attempt_number}
+                        </p>
+                        <p className={`text-[10px] ${textColor} mt-1`}>{note.note_text}</p>
+                        <p className={`text-[9px] ${dateColor} mt-1`}>
+                          {new Date(note.created_at).toLocaleDateString('es-MX')}
+                        </p>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
