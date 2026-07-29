@@ -1,9 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
-import { X, Loader2, AlertCircle } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { X, Loader2, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase } from '../../../../../lib/supabase/client';
-import DecisionMakersForm from './DecisionMakersForm';
 
 interface InitialCampaignModalProps {
   isOpen: boolean;
@@ -25,10 +24,62 @@ export default function InitialCampaignModal({
   onCampaignStarted,
 }: InitialCampaignModalProps) {
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [currentMonth, setCurrentMonth] = useState(new Date());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (!isOpen || !lead) return null;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const todayString = today.toISOString().split('T')[0];
+
+  const daysInMonth = (date: Date) => {
+    return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  };
+
+  const firstDayOfMonth = (date: Date) => {
+    return new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+  };
+
+  const isMonthDisabled = (month: Date) => {
+    return month < today;
+  };
+
+  const calendarDays = useMemo(() => {
+    const days = [];
+    const numDays = daysInMonth(currentMonth);
+    const firstDay = firstDayOfMonth(currentMonth);
+
+    for (let i = 0; i < firstDay; i++) {
+      days.push(null);
+    }
+
+    for (let i = 1; i <= numDays; i++) {
+      days.push(new Date(currentMonth.getFullYear(), currentMonth.getMonth(), i));
+    }
+
+    return days;
+  }, [currentMonth]);
+
+  const isDateDisabled = (date: Date | null) => {
+    if (!date) return true;
+    const dateString = date.toISOString().split('T')[0];
+    return dateString < todayString;
+  };
+
+  const isDateSelected = (date: Date | null) => {
+    if (!date) return false;
+    return date.toISOString().split('T')[0] === startDate;
+  };
+
+  const handleDateSelect = (date: Date) => {
+    if (!isDateDisabled(date)) {
+      setStartDate(date.toISOString().split('T')[0]);
+      if (error) setError(null);
+    }
+  };
 
   const handleContinue = async () => {
     if (!startDate) {
@@ -40,7 +91,6 @@ export default function InitialCampaignModal({
     setError(null);
 
     try {
-      // Get the next pipeline stage (should be "llamada" for stage orden 2)
       const { data: stagesData, error: stagesError } = await supabase
         .from('pipeline_stages')
         .select('clave')
@@ -50,7 +100,6 @@ export default function InitialCampaignModal({
       if (stagesError) throw stagesError;
       const nextStageClave = stagesData?.clave || 'llamada';
 
-      // Create the first lead task (contacto_inicial)
       const { data: taskData, error: taskError } = await supabase
         .from('lead_tasks')
         .insert({
@@ -66,7 +115,6 @@ export default function InitialCampaignModal({
 
       if (taskError) throw taskError;
 
-      // Update lead status to next stage
       const { error: leadError } = await supabase
         .from('leads')
         .update({ status: nextStageClave })
@@ -74,7 +122,6 @@ export default function InitialCampaignModal({
 
       if (leadError) throw leadError;
 
-      // Log interaction
       const { error: interactionError } = await supabase
         .from('lead_interactions')
         .insert({
@@ -91,7 +138,6 @@ export default function InitialCampaignModal({
 
       if (interactionError) throw interactionError;
 
-      // Reset and close
       setStartDate(new Date().toISOString().split('T')[0]);
       onClose();
       onCampaignStarted?.();
@@ -103,16 +149,15 @@ export default function InitialCampaignModal({
     }
   };
 
+  const monthName = currentMonth.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+
   return (
     <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-xl max-w-md w-full overflow-hidden animate-scale-in">
         {/* Header */}
         <div className="bg-slate-900 text-white p-6 border-b border-slate-800">
           <div className="flex items-start justify-between">
-            <div>
-              <h2 className="text-lg font-bold">Iniciar Campaña</h2>
-              <p className="text-xs text-slate-300 mt-1">Etapa 1 - Inicio de Campaña</p>
-            </div>
+            <h2 className="text-lg font-bold">Iniciar Campaña</h2>
             <button
               onClick={onClose}
               disabled={isSubmitting}
@@ -127,7 +172,7 @@ export default function InitialCampaignModal({
         <div className="p-6 space-y-4">
           {/* Lead Info */}
           <div className="space-y-2">
-            <div className="text-xs font-bold text-slate-500 uppercase">Negocio</div>
+            <div className="text-xs font-bold text-slate-500 uppercase">Prospecto</div>
             <div>
               <div className="font-bold text-slate-900">{lead.business_name}</div>
               <div className="text-xs text-slate-500">{lead.business_type}</div>
@@ -139,25 +184,74 @@ export default function InitialCampaignModal({
             </div>
           </div>
 
-          {/* Decision Makers */}
-          <div className="space-y-2">
-            {lead && <DecisionMakersForm leadId={lead.id} readOnly={false} />}
-          </div>
-
-          {/* Start Date */}
-          <div className="space-y-2">
+          {/* Calendar */}
+          <div className="space-y-3">
             <label className="text-xs font-bold text-slate-700">Fecha de inicio de trabajo</label>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => {
-                setStartDate(e.target.value);
-                if (error) setError(null);
-              }}
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-              disabled={isSubmitting}
-            />
-            <p className="text-xs text-slate-500">Selecciona la fecha en que comenzarás a trabajar este lead</p>
+
+            {/* Month Navigation */}
+            <div className="flex items-center justify-between">
+              <button
+                onClick={() =>
+                  setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1))
+                }
+                disabled={isMonthDisabled(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1))}
+                className="p-1 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-colors"
+              >
+                <ChevronLeft size={16} className="text-slate-600" />
+              </button>
+              <span className="text-xs font-bold text-slate-700 capitalize">{monthName}</span>
+              <button
+                onClick={() =>
+                  setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1))
+                }
+                className="p-1 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                <ChevronRight size={16} className="text-slate-600" />
+              </button>
+            </div>
+
+            {/* Calendar Grid */}
+            <div className="bg-slate-50 rounded-lg p-3">
+              {/* Day headers */}
+              <div className="grid grid-cols-7 gap-1 mb-2">
+                {['Do', 'Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sa'].map((day) => (
+                  <div key={day} className="text-center text-[10px] font-bold text-slate-500">
+                    {day}
+                  </div>
+                ))}
+              </div>
+
+              {/* Calendar days */}
+              <div className="grid grid-cols-7 gap-1">
+                {calendarDays.map((date, idx) => {
+                  const disabled = isDateDisabled(date);
+                  const selected = isDateSelected(date);
+
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => date && handleDateSelect(date)}
+                      disabled={disabled}
+                      className={`
+                        aspect-square text-[11px] font-bold rounded-lg transition-all
+                        ${!date ? 'invisible' : ''}
+                        ${
+                          selected
+                            ? 'bg-blue-600 text-white hover:bg-blue-700'
+                            : disabled
+                            ? 'bg-slate-100 text-slate-300 border border-slate-100 cursor-not-allowed'
+                            : 'text-slate-700 bg-white border border-slate-200 hover:bg-slate-100'
+                        }
+                      `}
+                    >
+                      {date?.getDate()}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-500">Selecciona la fecha en que comenzarás a trabajar este prospecto</p>
           </div>
 
           {/* Error */}
@@ -176,12 +270,12 @@ export default function InitialCampaignModal({
             disabled={isSubmitting}
             className="flex-1 px-4 py-2 text-sm font-bold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
           >
-            Cancelar
+            Cerrar
           </button>
           <button
             onClick={handleContinue}
             disabled={!startDate || isSubmitting}
-            className="flex-1 px-4 py-2 text-sm font-bold text-white bg-slate-900 rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            className="flex-1 px-4 py-2 text-sm font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {isSubmitting && <Loader2 size={14} className="animate-spin" />}
             Calendarizar
