@@ -46,6 +46,11 @@ export interface PipelineStage {
   orden: number;
   limite_pospuestas: number;
   intentos_requeridos: number;
+  tipo?: string;
+  tasa_exito?: number;
+  siguiente_etapa_id?: string | null;
+  continuar_a_id?: string | null;
+  regresar_a_id?: string | null;
 }
 
 export interface LeadRow {

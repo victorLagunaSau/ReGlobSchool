@@ -10,6 +10,8 @@ interface PipelineStage {
   descripcion?: string | null;
   orden: number;
   tipo?: string;
+  tasa_exito?: number;
+  siguiente_etapa_id?: string | null;
   continuar_a_id?: string | null;
   regresar_a_id?: string | null;
   intentos_requeridos?: number;
