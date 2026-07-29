@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Phone, Mail, MapPin, AlertCircle, Loader2, ChevronDown, CheckCircle2, RotateCcw, Trash2, Calendar } from 'lucide-react';
+import { X, Phone, Mail, MapPin, AlertCircle, Loader2, CheckCircle2, RotateCcw, Trash2, Calendar, Info } from 'lucide-react';
 import { supabase } from '../../../../../lib/supabase/client';
 import { resolveTaskWithPipeline } from '../../../../../lib/task-automation';
 import DecisionMakersForm from './DecisionMakersForm';
@@ -402,11 +402,21 @@ export default function ContactAttemptModal({
           <div className="flex-1 overflow-y-auto p-6 space-y-6 border-r border-slate-200">
             {/* Datos de la Empresa */}
             {lead && (
-              <div className="space-y-1 pb-4 border-b-2 border-slate-300">
+              <div className="space-y-2 pb-4 border-b-2 border-slate-300">
                 <div className="text-3xl font-bold text-slate-900">{lead.business_name}</div>
-                <div className="text-sm text-slate-600">
-                  {lead.zone_city && `${lead.zone_city}, `}
-                  {lead.state_name && `${lead.state_name}`}
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-sm text-slate-600 flex-1">
+                    {lead.zone_city && `${lead.zone_city}, `}
+                    {lead.state_name && `${lead.state_name}`}
+                  </div>
+                  <button
+                    onClick={() => setIsLeadInfoOpen(!isLeadInfoOpen)}
+                    className="flex items-center gap-1.5 px-2.5 py-1 hover:bg-blue-50 rounded-lg transition-all flex-shrink-0 text-blue-600 hover:text-blue-700 group"
+                    title="Ver información del lead"
+                  >
+                    <Info size={18} />
+                    <span className="text-xs font-semibold text-blue-600 group-hover:text-blue-700">Información de Lead</span>
+                  </button>
                 </div>
               </div>
             )}
@@ -419,93 +429,87 @@ export default function ContactAttemptModal({
             </div>
           )}
 
-
           {!loading && lead && (
             <>
-              {/* Lead Info - Collapsible */}
-              <div className="border border-slate-200 rounded-lg overflow-hidden">
-                <button
-                  onClick={() => setIsLeadInfoOpen(!isLeadInfoOpen)}
-                  className="w-full flex items-center justify-between bg-slate-50 hover:bg-slate-100 p-3 transition-all"
-                >
-                  <span className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                    ℹ️ Información de Lead
-                  </span>
-                  <ChevronDown
-                    size={18}
-                    className={`text-slate-600 transition-transform ${
-                      isLeadInfoOpen ? 'rotate-180' : ''
-                    }`}
-                  />
-                </button>
+              {/* Lead Info Popover */}
+              {isLeadInfoOpen && (
+                <div className="fixed inset-0 bg-black/30 z-40" onClick={() => setIsLeadInfoOpen(false)} />
+              )}
+              {isLeadInfoOpen && (
+                <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white rounded-2xl shadow-2xl border border-slate-200 z-50 max-w-3xl w-[90vw] p-6">
+                  <button
+                    onClick={() => setIsLeadInfoOpen(false)}
+                    className="absolute top-4 right-4 p-1 hover:bg-slate-100 rounded-lg transition-all"
+                  >
+                    <X size={18} />
+                  </button>
 
-                {isLeadInfoOpen && (
-                  <div className="p-4 space-y-2 bg-white border-t border-slate-200 text-xs">
-                    <div className="grid grid-cols-2 gap-3">
+                  <h3 className="text-lg font-bold text-slate-900 mb-6">Información de Contacto</h3>
+
+                  <div className="grid grid-cols-2 gap-6 text-sm">
+                    <div>
+                      <p className="font-bold text-slate-700 mb-1">Empresa</p>
+                      <p className="text-slate-600">{lead.business_name}</p>
+                    </div>
+                    <div>
+                      <p className="font-bold text-slate-700 mb-1">Tipo</p>
+                      <p className="text-slate-600 capitalize">{lead.business_type}</p>
+                    </div>
+                    {lead.phone && (
                       <div>
-                        <p className="font-bold text-slate-700">Empresa</p>
-                        <p className="text-slate-600">{lead.business_name}</p>
+                        <p className="font-bold text-slate-700 mb-1 flex items-center gap-2">
+                          <Phone size={14} className="text-slate-400" /> Teléfono
+                        </p>
+                        <p className="text-slate-600">{lead.phone}</p>
                       </div>
+                    )}
+                    {lead.email && (
                       <div>
-                        <p className="font-bold text-slate-700">Tipo</p>
-                        <p className="text-slate-600 capitalize">{lead.business_type}</p>
+                        <p className="font-bold text-slate-700 mb-1 flex items-center gap-2">
+                          <Mail size={14} className="text-slate-400" /> Email
+                        </p>
+                        <p className="text-slate-600 break-all">{lead.email}</p>
                       </div>
-                      {lead.phone && (
-                        <div>
-                          <p className="font-bold text-slate-700">Teléfono</p>
-                          <p className="text-slate-600 flex items-center gap-1">
-                            <Phone size={10} /> {lead.phone}
-                          </p>
-                        </div>
-                      )}
-                      {lead.email && (
-                        <div>
-                          <p className="font-bold text-slate-700">Email</p>
-                          <p className="text-slate-600 flex items-center gap-1">
-                            <Mail size={10} /> {lead.email}
-                          </p>
-                        </div>
-                      )}
-                      {lead.zone_city && (
-                        <div>
-                          <p className="font-bold text-slate-700">Zona</p>
-                          <p className="text-slate-600 flex items-center gap-1">
-                            <MapPin size={10} /> {lead.zone_city}
-                          </p>
-                        </div>
-                      )}
-                      {lead.state_name && (
-                        <div>
-                          <p className="font-bold text-slate-700">Estado/País</p>
-                          <p className="text-slate-600">
-                            {lead.state_name}
-                            {lead.country_name ? `, ${lead.country_name}` : ''}
-                          </p>
-                        </div>
-                      )}
-                      {lead.website && (
-                        <div>
-                          <p className="font-bold text-slate-700">Sitio Web</p>
-                          <a
-                            href={lead.website}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-600 hover:underline"
-                          >
-                            {lead.website}
-                          </a>
-                        </div>
-                      )}
+                    )}
+                    {lead.zone_city && (
                       <div>
-                        <p className="font-bold text-slate-700">Creado</p>
+                        <p className="font-bold text-slate-700 mb-1 flex items-center gap-2">
+                          <MapPin size={14} className="text-slate-400" /> Zona
+                        </p>
+                        <p className="text-slate-600">{lead.zone_city}</p>
+                      </div>
+                    )}
+                    {lead.state_name && (
+                      <div>
+                        <p className="font-bold text-slate-700 mb-1">Estado/País</p>
                         <p className="text-slate-600">
-                          {new Date(lead.created_at).toLocaleDateString('es-MX')}
+                          {lead.state_name}
+                          {lead.country_name ? `, ${lead.country_name}` : ''}
                         </p>
                       </div>
+                    )}
+                    {lead.website && (
+                      <div className="col-span-2">
+                        <p className="font-bold text-slate-700 mb-1">Sitio Web</p>
+                        <a
+                          href={lead.website}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline break-all"
+                        >
+                          {lead.website}
+                        </a>
+                      </div>
+                    )}
+                    <div>
+                      <p className="font-bold text-slate-700 mb-1">Creado</p>
+                      <p className="text-slate-600">
+                        {new Date(lead.created_at).toLocaleDateString('es-MX')}
+                      </p>
                     </div>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
 
               {/* Action Buttons - Only for contacto type */}
               {stages?.[0]?.tipo === 'contacto' && (
