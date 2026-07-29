@@ -32,6 +32,7 @@ export default function StageModalRouter({
         <InitialCampaignModal
           isOpen={isOpen}
           lead={lead}
+          stage={stage}
           onClose={onClose}
           onCampaignStarted={onSuccess}
         />

@@ -13,6 +13,10 @@ interface InitialCampaignModalProps {
     zone_city: string | null;
     state_name: string | null;
   } | null;
+  stage?: {
+    orden?: number;
+    tipo?: string;
+  } | null;
   onClose: () => void;
   onCampaignStarted?: () => void;
 }
@@ -20,6 +24,7 @@ interface InitialCampaignModalProps {
 export default function InitialCampaignModal({
   isOpen,
   lead,
+  stage,
   onClose,
   onCampaignStarted,
 }: InitialCampaignModalProps) {
@@ -157,7 +162,12 @@ export default function InitialCampaignModal({
         {/* Header */}
         <div className="bg-slate-900 text-white p-6 border-b border-slate-800">
           <div className="flex items-start justify-between">
-            <h2 className="text-lg font-bold">Iniciar Campaña</h2>
+            <div>
+              <h2 className="text-lg font-bold">Iniciar Campaña</h2>
+              <p className="text-xs text-slate-300 mt-1">
+                Etapa {stage?.orden} {stage?.tipo && `- Tipo: ${stage.tipo.charAt(0).toUpperCase() + stage.tipo.slice(1)}`}
+              </p>
+            </div>
             <button
               onClick={onClose}
               disabled={isSubmitting}
