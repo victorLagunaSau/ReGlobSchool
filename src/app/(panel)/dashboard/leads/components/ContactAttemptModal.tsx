@@ -22,7 +22,7 @@ interface ContactAttemptModalProps {
     country_name: string | null;
     created_at: string;
   } | null;
-  stages: Array<{ id: string; clave: string; titulo: string; orden: number; tipo?: string; siguiente_etapa_id?: string | null }>;
+  stages: Array<{ id: string; clave: string; titulo: string; orden?: number; tipo?: string; siguiente_etapa_id?: string | null }>;
   onClose: () => void;
   onTaskResolved?: () => void;
   onSuccessWithNextStage?: (nextStageType: string) => void;
@@ -152,28 +152,82 @@ export default function ContactAttemptModal({
           .limit(1)
           .single();
 
+        console.log('Fetching task - leadId:', leadId, 'taskData:', !!taskData, 'taskError:', taskError?.code);
+
         if (taskError && taskError.code !== 'PGRST116') {
           throw taskError;
         }
 
         if (taskData) {
+          console.log('Task found, setting currentTask');
           setCurrentTask(taskData as LeadTask);
           setAttemptNumber(taskData.attempt_number || 0);
+        } else {
+          console.log('No pending task found - fetching most recent task for this lead');
+          const { data: allTasks } = await supabase
+            .from('lead_tasks')
+            .select('*')
+            .eq('lead_id', leadId)
+            .in('task_type', ['contacto_inicial', 'seguimiento'])
+            .order('created_at', { ascending: false })
+            .limit(1);
+
+          if (allTasks && allTasks.length > 0) {
+            console.log('Using most recent task:', allTasks[0].id);
+            setCurrentTask(allTasks[0] as LeadTask);
+            setAttemptNumber(allTasks[0].attempt_number || 0);
+          } else {
+            console.log('No tasks found for this lead at all');
+          }
         }
 
-        // Fetch lead's assigned_to and contact info
+        // Fetch lead's assigned_to
         const { data: leadData, error: leadError } = await supabase
           .from('leads')
-          .select('assigned_to, contact_phones, contact_emails')
+          .select('assigned_to')
           .eq('id', leadId)
           .single();
 
         if (leadData) {
           setAssignedTo(leadData.assigned_to);
           setNewResponsible(leadData.assigned_to || '');
-          setContactPhones(leadData.contact_phones || []);
-          setContactEmails(leadData.contact_emails || []);
         }
+
+        // Fetch contacts from lead_contacts table
+        const { data: contactsData } = await supabase
+          .from('lead_contacts')
+          .select('*')
+          .eq('lead_id', leadId)
+          .order('created_at', { ascending: true });
+
+        // Filter by actual data presence, not by tipo field
+        let phones = contactsData?.filter(c => c.telefono) || [];
+        let emails = contactsData?.filter(c => c.email) || [];
+
+        // Add initial lead phone if exists (will be first cell, constante)
+        if (lead?.phone) {
+          phones.unshift({
+            id: `initial-phone-${leadId}`,
+            telefono: lead.phone,
+            nombre: lead.business_name || 'Contacto Principal',
+            cargo: 'Principal',
+            source: 'auto',
+          } as any);
+        }
+
+        // Add initial lead email if exists (will be first cell, constante)
+        if (lead?.email) {
+          emails.unshift({
+            id: `initial-email-${leadId}`,
+            email: lead.email,
+            nombre: lead.business_name || 'Contacto Principal',
+            cargo: 'Principal',
+            source: 'auto',
+          } as any);
+        }
+
+        setContactPhones(phones);
+        setContactEmails(emails);
 
         // Fetch decision makers
         const { data: dmData } = await supabase
@@ -205,7 +259,41 @@ export default function ContactAttemptModal({
     };
 
     fetchTask();
-  }, [isOpen, leadId]);
+  }, [isOpen, leadId, lead?.id]);
+
+  const deleteContact = async (contactId: string, tipo: 'telefono' | 'email') => {
+    // No eliminar contactos iniciales (que no existen en BD)
+    if (contactId.startsWith('initial-')) {
+      if (tipo === 'telefono') {
+        setContactPhones(prev => prev.filter((c: any) => c.id !== contactId));
+      } else {
+        setContactEmails(prev => prev.filter((c: any) => c.id !== contactId));
+      }
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('lead_contacts')
+        .delete()
+        .eq('id', contactId);
+
+      if (error) {
+        console.error('Error eliminando de BD:', error);
+        throw error;
+      }
+
+      // Actualizar estado local después de eliminar de BD
+      if (tipo === 'telefono') {
+        setContactPhones(prev => prev.filter((c: any) => c.id !== contactId));
+      } else {
+        setContactEmails(prev => prev.filter((c: any) => c.id !== contactId));
+      }
+    } catch (err) {
+      console.error('Error eliminando contacto:', err);
+      alert('Error al eliminar contacto.');
+    }
+  };
 
   const resetForm = () => {
     setSelectedOutcome(null);
@@ -218,7 +306,7 @@ export default function ContactAttemptModal({
     setError(null);
   };
 
-  const savePhoneContact = () => {
+  const savePhoneContact = async () => {
     setPhoneFormError(null);
 
     // Validar que al menos teléfono o email esté rellenado
@@ -238,26 +326,44 @@ export default function ContactAttemptModal({
       return;
     }
 
-    // Agregar a la lista de contactos
-    const newContact = {
-      phone: newPhone.trim() || null,
-      email: newPhoneEmail.trim() || null,
-      name: newPhoneName.trim(),
-      role: newPhoneRole.trim(),
-      source: 'manual',
-    };
+    try {
+      // Guardar en BD inmediatamente
+      const { data, error } = await supabase
+        .from('lead_contacts')
+        .insert({
+          lead_id: leadId,
+          tipo: 'telefono',
+          nombre: newPhoneName.trim(),
+          cargo: newPhoneRole.trim(),
+          telefono: newPhone.trim() || null,
+          email: newPhoneEmail.trim() || null,
+          source: 'manual',
+          es_tomador_decision: false,
+        })
+        .select()
+        .single();
 
-    setContactPhones([...contactPhones, newContact]);
+      if (error) throw error;
 
-    // Limpiar el formulario
-    setNewPhone('');
-    setNewPhoneEmail('');
-    setNewPhoneName('');
-    setNewPhoneRole('');
-    setIsAddingPhone(false);
+      // Agregar a la lista local
+      if (data) {
+        setContactPhones(prev => [...prev, data]);
+      }
+
+      // Limpiar el formulario
+      setNewPhone('');
+      setNewPhoneEmail('');
+      setNewPhoneName('');
+      setNewPhoneRole('');
+      setIsAddingPhone(false);
+      setPhoneFormError('');
+    } catch (err) {
+      console.error('Error guardando contacto telefónico:', err);
+      setPhoneFormError('Error al guardar. Intenta de nuevo.');
+    }
   };
 
-  const saveEmailContact = () => {
+  const saveEmailContact = async () => {
     setEmailFormError(null);
 
     // Validar que al menos teléfono o email esté rellenado
@@ -277,23 +383,41 @@ export default function ContactAttemptModal({
       return;
     }
 
-    // Agregar a la lista de contactos
-    const newContact = {
-      email: newEmailValue.trim() || null,
-      phone: newEmailPhone.trim() || null,
-      name: newEmailName.trim(),
-      role: newEmailRole.trim(),
-      source: 'manual',
-    };
+    try {
+      // Guardar en BD inmediatamente
+      const { data, error } = await supabase
+        .from('lead_contacts')
+        .insert({
+          lead_id: leadId,
+          tipo: 'email',
+          nombre: newEmailName.trim(),
+          cargo: newEmailRole.trim(),
+          email: newEmailValue.trim() || null,
+          telefono: newEmailPhone.trim() || null,
+          source: 'manual',
+          es_tomador_decision: false,
+        })
+        .select()
+        .single();
 
-    setContactEmails([...contactEmails, newContact]);
+      if (error) throw error;
 
-    // Limpiar el formulario
-    setNewEmailValue('');
-    setNewEmailPhone('');
-    setNewEmailName('');
-    setNewEmailRole('');
-    setIsAddingEmail(false);
+      // Agregar a la lista local
+      if (data) {
+        setContactEmails(prev => [...prev, data]);
+      }
+
+      // Limpiar el formulario
+      setNewEmailValue('');
+      setNewEmailPhone('');
+      setNewEmailName('');
+      setNewEmailRole('');
+      setIsAddingEmail(false);
+      setEmailFormError('');
+    } catch (err) {
+      console.error('Error guardando contacto de email:', err);
+      setEmailFormError('Error al guardar. Intenta de nuevo.');
+    }
   };
 
   const saveAttemptNote = async (noteType: 'attempt' | 'success' | 'retry' | 'discard', qualifiedComment?: string) => {
@@ -464,7 +588,8 @@ export default function ContactAttemptModal({
   };
 
   const handleReintentar = async (days: number) => {
-    if (!currentTask || !note.trim() || note.trim().length < 10) {
+    const trimmedNote = note.trim();
+    if (!trimmedNote || trimmedNote.length < 10) {
       setError('La nota debe tener al menos 10 caracteres');
       commentRef.current?.focus();
       commentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -483,13 +608,31 @@ export default function ContactAttemptModal({
       await saveAttemptNote('retry', qualifiedComment);
       const nextDate = calculateNextRetryDate(days);
 
+      // Get current task if not loaded
+      let task = currentTask;
+      if (!task && leadId) {
+        const { data: taskData } = await supabase
+          .from('lead_tasks')
+          .select('*')
+          .eq('lead_id', leadId)
+          .in('task_type', ['contacto_inicial', 'seguimiento'])
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+        task = taskData as LeadTask;
+      }
+
+      if (!task) {
+        throw new Error('No se pudo encontrar la tarea para reagendar');
+      }
+
       await resolveTaskWithPipeline(
         {
-          id: currentTask.id,
-          lead_id: currentTask.lead_id,
-          task_type: currentTask.task_type,
-          channel: currentTask.channel,
-          attempt_number: currentTask.attempt_number,
+          id: task.id,
+          lead_id: task.lead_id,
+          task_type: task.task_type,
+          channel: task.channel,
+          attempt_number: task.attempt_number,
         },
         'reintentar',
         undefined,
@@ -539,8 +682,10 @@ export default function ContactAttemptModal({
       onClose();
       onTaskResolved?.();
     } catch (err) {
-      console.error('Error discarding:', err);
-      setError('Error al guardar. Intenta de nuevo.');
+      const errorMessage = err instanceof Error ? err.message : JSON.stringify(err);
+      console.error('Error discarding:', errorMessage);
+      console.error('Full error:', err);
+      setError(`Error al guardar: ${errorMessage}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -709,68 +854,47 @@ export default function ContactAttemptModal({
                   <div>
                     <h4 className="text-xs font-bold text-slate-600 uppercase mb-3">Llamadas</h4>
 
-                    {/* Phone/Contact Grid Catalog */}
+                    {/* Phone/Contact Grid Catalog - 4 columns */}
                     <div className="grid grid-cols-4 gap-2 mb-3">
-                      {/* Inicial - Lead phone */}
-                      {lead.phone && (
-                        <button
-                          type="button"
-                          onClick={() => window.location.href = `tel:${lead.phone}`}
-                          className="text-xs bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg p-2 text-left transition-all group"
-                        >
-                          <div className="font-semibold text-slate-900 group-hover:text-blue-600 flex items-center gap-1">
-                            <Phone size={12} />
-                            Inicial
-                          </div>
-                          <div className="text-slate-600 text-[10px] mt-0.5 font-semibold">{lead.phone}</div>
-                        </button>
-                      )}
-
-                      {/* Saved Phones */}
-                      {contactPhones.map((phone, idx) => (
-                        <button
-                          key={`contact-${idx}`}
-                          onClick={() => {
-                            if (phone.phone) window.location.href = `tel:${phone.phone}`;
-                            else if (phone.email) window.location.href = `mailto:${phone.email}`;
-                          }}
-                          className="text-xs bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg p-2 text-left transition-all group"
-                        >
-                          <div className="font-semibold text-slate-900 group-hover:text-blue-600 truncate">{phone.name}</div>
-                          {phone.role && <div className="text-slate-600 text-[10px] truncate">{phone.role}</div>}
-                          <div className="flex items-center gap-1 mt-0.5">
-                            {phone.phone && (
-                              <>
-                                <Phone size={10} className="text-blue-400 flex-shrink-0" />
-                                <span className="text-[10px] font-semibold text-blue-600 truncate">{phone.phone}</span>
-                              </>
-                            )}
-                            {phone.email && !phone.phone && (
-                              <>
-                                <Mail size={10} className="text-blue-400 flex-shrink-0" />
-                                <span className="text-[10px] font-semibold text-blue-600 truncate">{phone.email}</span>
-                              </>
-                            )}
-                          </div>
-                        </button>
-                      ))}
-
-                      {/* Decision Makers with Phone */}
-                      {decisionMakers.map((dm) =>
-                        dm.telefono ? (
-                          <button
-                            key={dm.id}
-                            onClick={() => window.location.href = `tel:${dm.telefono}`}
-                            className="text-xs bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg p-2 text-left transition-all group"
-                          >
-                            <div className="font-semibold text-slate-900 group-hover:text-blue-600 truncate">{dm.nombre}</div>
-                            {dm.cargo && <div className="text-slate-600 text-[10px] truncate">{dm.cargo}</div>}
-                            <div className="flex items-center gap-1 mt-0.5">
-                              <Phone size={10} className="text-blue-400 flex-shrink-0" />
-                              <span className="text-[10px] font-semibold text-blue-600 truncate">{dm.telefono}</span>
+                      {contactPhones.length === 0 ? (
+                        <div className="col-span-4 text-xs text-slate-400 italic">Sin contactos telefónicos agregados</div>
+                      ) : (
+                        contactPhones.map((phone, idx) => {
+                          const isInitial = phone.id?.startsWith('initial-phone-');
+                          return (
+                            <div
+                              key={phone.id || `contact-${idx}`}
+                              className={`flex flex-col gap-1 p-2 rounded-lg transition-all relative group ${
+                                isInitial
+                                  ? 'bg-emerald-50 border border-emerald-300'
+                                  : 'bg-blue-50 border border-blue-200 hover:bg-blue-100'
+                              }`}
+                            >
+                              <div className="flex-1 min-w-0">
+                                <div className="font-semibold text-slate-900 text-xs truncate">{phone.nombre}</div>
+                                <div className="text-slate-600 text-[10px] truncate">{phone.cargo}</div>
+                                {phone.telefono && (
+                                  <button
+                                    onClick={() => window.location.href = `tel:${phone.telefono}`}
+                                    className="flex items-center gap-1 mt-1 text-blue-600 hover:text-blue-700 text-[10px] font-semibold"
+                                  >
+                                    <Phone size={10} />
+                                    {phone.telefono}
+                                  </button>
+                                )}
+                              </div>
+                              {!isInitial && (
+                                <button
+                                  onClick={() => deleteContact(phone.id, 'telefono')}
+                                  className="absolute top-1 right-1 text-slate-400 hover:text-red-600 transition-colors p-0.5 opacity-0 group-hover:opacity-100"
+                                  title="Eliminar"
+                                >
+                                  ×
+                                </button>
+                              )}
                             </div>
-                          </button>
-                        ) : null
+                          );
+                        })
                       )}
                     </div>
 
@@ -876,51 +1000,47 @@ export default function ContactAttemptModal({
                   <div>
                     <h4 className="text-xs font-bold text-slate-600 uppercase mb-3">Emails</h4>
 
-                    {/* Email Catalog Grid - 3 per row */}
+                    {/* Email List - 3 columns */}
                     <div className="grid grid-cols-3 gap-2 mb-3">
-                      {lead.email && (
-                        <button
-                          type="button"
-                          onClick={() => window.location.href = `mailto:${lead.email}`}
-                          className="p-2 bg-slate-100 border border-slate-200 rounded-lg hover:bg-slate-200 transition-all text-left space-y-1 group"
-                          title="Enviar email"
-                        >
-                          <div className="text-[10px] font-semibold text-slate-700 truncate">Inicial</div>
-                          <div className="text-[10px] text-slate-600 truncate group-hover:text-blue-600">{lead.email}</div>
-                        </button>
-                      )}
-                      {contactEmails.map((contact, idx) => (
-                        <button
-                          key={idx}
-                          onClick={() => window.location.href = contact.email ? `mailto:${contact.email}` : contact.phone ? `tel:${contact.phone}` : '#'}
-                          className="p-2 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-all text-left space-y-1 group"
-                          title={`${contact.name} - ${contact.role}`}
-                        >
-                          <div className="text-[10px] font-semibold text-slate-700 truncate">{contact.name}</div>
-                          <div className="text-[10px] text-slate-600 truncate">{contact.role}</div>
-                          {contact.email && (
-                            <div className="text-[10px] text-slate-600 truncate group-hover:text-blue-600">{contact.email}</div>
-                          )}
-                          {contact.phone && (
-                            <div className="text-[10px] text-slate-600 truncate group-hover:text-blue-600">{contact.phone}</div>
-                          )}
-                        </button>
-                      ))}
-
-                      {/* Decision Makers with Email */}
-                      {decisionMakers.map((dm) =>
-                        dm.email ? (
-                          <button
-                            key={dm.id}
-                            onClick={() => window.location.href = `mailto:${dm.email}`}
-                            className="p-2 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-all text-left space-y-1 group"
-                            title={`${dm.nombre} - ${dm.cargo}`}
-                          >
-                            <div className="text-[10px] font-semibold text-slate-700 truncate">{dm.nombre}</div>
-                            {dm.cargo && <div className="text-[10px] text-slate-600 truncate">{dm.cargo}</div>}
-                            <div className="text-[10px] text-slate-600 truncate group-hover:text-blue-600">{dm.email}</div>
-                          </button>
-                        ) : null
+                      {contactEmails.length === 0 ? (
+                        <div className="col-span-3 text-xs text-slate-400 italic">Sin contactos de email agregados</div>
+                      ) : (
+                        contactEmails.map((contact, idx) => {
+                          const isInitial = contact.id?.startsWith('initial-email-');
+                          return (
+                            <div
+                              key={contact.id || `email-${idx}`}
+                              className={`flex flex-col gap-1 p-2 rounded-lg transition-all relative group ${
+                                isInitial
+                                  ? 'bg-emerald-50 border border-emerald-300'
+                                  : 'bg-blue-50 border border-blue-200 hover:bg-blue-100'
+                              }`}
+                            >
+                              <div className="flex-1 min-w-0">
+                                <div className="font-semibold text-slate-900 text-xs truncate">{contact.nombre}</div>
+                                <div className="text-slate-600 text-[10px] truncate">{contact.cargo}</div>
+                                {contact.email && (
+                                  <button
+                                    onClick={() => window.location.href = `mailto:${contact.email}`}
+                                    className="flex items-center gap-1 mt-1 text-blue-600 hover:text-blue-700 text-[10px] font-semibold"
+                                  >
+                                    <Mail size={10} />
+                                    {contact.email}
+                                  </button>
+                                )}
+                              </div>
+                              {!isInitial && (
+                                <button
+                                  onClick={() => deleteContact(contact.id, 'email')}
+                                  className="absolute top-1 right-1 text-slate-400 hover:text-red-600 transition-colors p-0.5 opacity-0 group-hover:opacity-100"
+                                  title="Eliminar"
+                                >
+                                  ×
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })
                       )}
                     </div>
 
@@ -1048,59 +1168,57 @@ export default function ContactAttemptModal({
 
                   {/* Result Buttons - All 3 together */}
                   <div className="space-y-2">
-                  <p className="text-xs font-bold text-slate-600 uppercase">Resultado del Intento</p>
-                  <div className="grid grid-cols-3 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!selectedOutcome) {
-                          setSelectedOutcome('descartar');
-                        } else if (selectedOutcome === 'descartar') {
-                          handleDescartar();
-                        }
-                      }}
-                      disabled={!canDiscard || isSubmitting}
-                      className={`flex items-center justify-center gap-1 px-2 py-2.5 rounded-lg font-semibold text-xs transition-all ${
-                        canDiscard
-                          ? 'bg-red-600 text-white hover:bg-red-700'
-                          : 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                      } disabled:opacity-50`}
-                    >
-                      <Trash2 size={14} />
-                      Descartar
-                    </button>
-                    {!isAttempt4 && (
+                    <p className="text-xs font-bold text-slate-600 uppercase">Resultado del Intento</p>
+                    <div className="grid grid-cols-3 gap-2">
                       <button
                         type="button"
                         onClick={() => {
                           if (!selectedOutcome) {
-                            setSelectedOutcome('reintentar');
-                          } else if (selectedOutcome === 'reintentar') {
-                            handleReintentar();
+                            setSelectedOutcome('descartar');
+                          } else if (selectedOutcome === 'descartar') {
+                            handleDescartar();
                           }
                         }}
-                        disabled={isSubmitting}
-                        className="flex items-center justify-center gap-1 px-2 py-2.5 bg-slate-500 text-white rounded-lg hover:bg-slate-600 transition-all font-semibold text-xs disabled:opacity-50"
+                        disabled={!canDiscard || isSubmitting}
+                        className={`flex items-center justify-center gap-1 px-2 py-2.5 rounded-lg font-semibold text-xs transition-all ${
+                          canDiscard
+                            ? 'bg-red-600 text-white hover:bg-red-700'
+                            : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                        } disabled:opacity-50`}
                       >
-                        <RotateCcw size={14} />
-                        Reintentar
+                        <Trash2 size={14} />
+                        Descartar
                       </button>
+                      {!isAttempt4 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!selectedOutcome) {
+                              setSelectedOutcome('reintentar');
+                            }
+                          }}
+                          disabled={isSubmitting}
+                          className="flex items-center justify-center gap-1 px-2 py-2.5 bg-slate-500 text-white rounded-lg hover:bg-slate-600 transition-all font-semibold text-xs disabled:opacity-50"
+                        >
+                          <RotateCcw size={14} />
+                          Reintentar
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={handleSuccess}
+                        disabled={isSubmitting}
+                        className="flex items-center justify-center gap-1 px-2 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all font-semibold text-xs disabled:opacity-50"
+                      >
+                        <CheckCircle2 size={14} />
+                        Éxito
+                      </button>
+                    </div>
+                    {!canDiscard && (
+                      <p className="text-xs text-amber-600 bg-amber-50 rounded p-2">
+                        Puedes descartar después del intento 2
+                      </p>
                     )}
-                    <button
-                      type="button"
-                      onClick={handleSuccess}
-                      disabled={isSubmitting}
-                      className="flex items-center justify-center gap-1 px-2 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all font-semibold text-xs disabled:opacity-50"
-                    >
-                      <CheckCircle2 size={14} />
-                      Éxito
-                    </button>
-                  </div>
-                  {!canDiscard && (
-                    <p className="text-xs text-amber-600 bg-amber-50 rounded p-2">
-                      Puedes descartar después del intento 2
-                    </p>
-                  )}
                   </div>
                 </div>
               )}

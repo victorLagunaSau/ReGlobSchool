@@ -34,15 +34,16 @@ export default function DecisionMakersForm({
   });
   const [isSaving, setIsSaving] = useState(false);
 
-  // Fetch decision makers
+  // Fetch decision makers from lead_contacts where es_tomador_decision = true
   useEffect(() => {
     const fetchDecisionMakers = async () => {
       setLoading(true);
       try {
         const { data, error } = await supabase
-          .from('lead_decision_makers')
+          .from('lead_contacts')
           .select('*')
           .eq('lead_id', leadId)
+          .eq('es_tomador_decision', true)
           .order('created_at', { ascending: false });
 
         if (error) throw error;
@@ -65,14 +66,23 @@ export default function DecisionMakersForm({
 
     setIsSaving(true);
     try {
+      // Determine tipo based on which field has data
+      let tipo = 'telefono';
+      if (!newDM.telefono?.trim() && newDM.email?.trim()) {
+        tipo = 'email';
+      }
+
       const { data, error } = await supabase
-        .from('lead_decision_makers')
+        .from('lead_contacts')
         .insert({
           lead_id: leadId,
           nombre: newDM.nombre.trim(),
-          cargo: newDM.cargo?.trim() || null,
+          cargo: newDM.cargo?.trim() || '',
           telefono: newDM.telefono?.trim() || null,
           email: newDM.email?.trim() || null,
+          tipo: tipo,
+          source: 'manual',
+          es_tomador_decision: true,
         })
         .select()
         .single();
@@ -92,11 +102,9 @@ export default function DecisionMakersForm({
   };
 
   const handleDeleteDecisionMaker = async (id: string) => {
-    if (!confirm('¿Eliminar este tomador de decisiones?')) return;
-
     try {
       const { error } = await supabase
-        .from('lead_decision_makers')
+        .from('lead_contacts')
         .delete()
         .eq('id', id);
 

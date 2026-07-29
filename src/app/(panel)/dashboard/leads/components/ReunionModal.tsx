@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { X, Loader2, AlertCircle, Calendar, MapPin, User } from 'lucide-react';
 import { supabase } from '../../../../../lib/supabase/client';
 import DecisionMakersForm from './DecisionMakersForm';
@@ -20,7 +20,13 @@ interface ReunionModalProps {
   onSuccess?: () => void;
 }
 
-type Step = 'calendar' | 'context';
+interface DecisionMaker {
+  id: string;
+  nombre: string;
+  cargo: string;
+  email?: string;
+  telefono?: string;
+}
 
 export default function ReunionModal({
   isOpen,
@@ -30,18 +36,18 @@ export default function ReunionModal({
   onClose,
   onSuccess,
 }: ReunionModalProps) {
-  const [step, setStep] = useState<Step>('calendar');
   const [fechaReunion, setFechaReunion] = useState(new Date().toISOString().split('T')[0]);
   const [horaReunion, setHoraReunion] = useState('10:00');
   const [ubicacion, setUbicacion] = useState<'presencial' | 'virtual'>('presencial');
-  const [decisionMakerId, setDecisionMakerId] = useState<string | null>(null);
+  const [decisionMakersSeleccionados, setDecisionMakersSeleccionados] = useState<DecisionMaker[]>([]);
   const [contexto, setContexto] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const contextoRef = useRef<HTMLTextAreaElement>(null);
 
   if (!isOpen || !lead) return null;
 
-  const handleNextStep = () => {
+  const handleSaveReunion = async () => {
     if (!fechaReunion) {
       setError('Selecciona una fecha');
       return;
@@ -50,17 +56,14 @@ export default function ReunionModal({
       setError('Selecciona una hora');
       return;
     }
-    if (!decisionMakerId) {
-      setError('Selecciona un tomador de decisiones');
+    if (decisionMakersSeleccionados.length === 0) {
+      setError('Selecciona al menos un tomador de decisiones');
       return;
     }
-    setError(null);
-    setStep('context');
-  };
-
-  const handleSaveReunion = async () => {
     if (!contexto.trim() || contexto.length < 20) {
       setError('Contexto requerido (mínimo 20 caracteres)');
+      contextoRef.current?.focus();
+      contextoRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
 
@@ -80,7 +83,7 @@ export default function ReunionModal({
           scheduled_for: scheduledDateTime,
           metadata: {
             ubicacion,
-            decision_maker_id: decisionMakerId,
+            decision_makers: decisionMakersSeleccionados.map(dm => ({ id: dm.id, nombre: dm.nombre })),
           },
         })
         .select()
@@ -121,7 +124,7 @@ export default function ReunionModal({
             task_id: taskData?.id,
             contexto,
             ubicacion,
-            decision_maker_id: decisionMakerId,
+            decision_makers: decisionMakersSeleccionados.map(dm => dm.nombre),
           },
         });
 
@@ -131,9 +134,8 @@ export default function ReunionModal({
       setFechaReunion(new Date().toISOString().split('T')[0]);
       setHoraReunion('10:00');
       setUbicacion('presencial');
-      setDecisionMakerId(null);
+      setDecisionMakersSeleccionados([]);
       setContexto('');
-      setStep('calendar');
       onClose();
       onSuccess?.();
     } catch (err) {
@@ -146,14 +148,12 @@ export default function ReunionModal({
 
   return (
     <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl max-w-md w-full overflow-hidden animate-scale-in">
+      <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto animate-scale-in">
         {/* Header */}
-        <div className="bg-slate-900 text-white p-6 border-b border-slate-800">
+        <div className="bg-slate-900 text-white p-6 border-b border-slate-800 sticky top-0">
           <div className="flex items-start justify-between">
             <div>
-              <h2 className="text-lg font-bold">
-                {step === 'calendar' ? 'Calendarizar Reunión' : 'Contexto de Reunión'}
-              </h2>
+              <h2 className="text-lg font-bold">Reunión de Demostración</h2>
               <p className="text-xs text-slate-300 mt-1">
                 Etapa {stage?.orden} {stage?.tipo && `- Tipo: ${stage.tipo.charAt(0).toUpperCase() + stage.tipo.slice(1)}`}
               </p>
@@ -171,35 +171,42 @@ export default function ReunionModal({
         {/* Content */}
         <div className="p-6 space-y-6">
           {/* Lead Info */}
-          <div className="space-y-1 pb-4 border-b-2 border-slate-300">
-            <div className="text-right text-xs text-slate-600">{lead.business_type}</div>
+          <div className="space-y-2 pb-4 border-b-2 border-slate-300">
             <div className="text-3xl font-bold text-slate-900">{lead.business_name}</div>
-            {lead.zone_city && (
-              <div className="text-sm text-slate-600">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-sm text-slate-600 flex-1">
                 {lead.zone_city}{lead.state_name ? `, ${lead.state_name}` : ''}
               </div>
-            )}
+              <div className="text-xs text-slate-600">{lead.business_type}</div>
+            </div>
           </div>
 
-          {/* Step 1: Calendar & Decision Maker */}
-          {step === 'calendar' && (
-            <>
+          {/* Acciones de Reunión */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide">Acciones de Reunión</h3>
+
+            {/* Calendarizar Section */}
+            <div className="space-y-4 bg-white p-4 rounded-lg border border-slate-200">
+              <h4 className="text-xs font-bold text-slate-600 uppercase">Calendarizar</h4>
+
+              {/* Fecha */}
               <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                  <Calendar size={14} /> Fecha de Reunión *
+                  <Calendar size={14} /> Fecha *
                 </label>
                 <input
                   type="date"
                   value={fechaReunion}
                   onChange={(e) => {
                     setFechaReunion(e.target.value);
-                    if (error) setError(null);
+                    if (error?.includes('fecha')) setError(null);
                   }}
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
                   disabled={isSubmitting}
                 />
               </div>
 
+              {/* Hora */}
               <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-700">Hora *</label>
                 <input
@@ -207,24 +214,25 @@ export default function ReunionModal({
                   value={horaReunion}
                   onChange={(e) => {
                     setHoraReunion(e.target.value);
-                    if (error) setError(null);
+                    if (error?.includes('hora')) setError(null);
                   }}
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
                   disabled={isSubmitting}
                 />
               </div>
 
+              {/* Tipo de Reunión */}
               <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                  <MapPin size={14} /> Tipo de Reunión *
+                  <MapPin size={14} /> Tipo *
                 </label>
                 <div className="flex gap-2">
                   <button
                     onClick={() => setUbicacion('presencial')}
-                    className={`flex-1 px-3 py-2 text-xs font-bold rounded-lg transition-colors ${
+                    className={`flex-1 px-3 py-2 text-xs font-bold rounded-lg transition-all ${
                       ubicacion === 'presencial'
-                        ? 'bg-slate-900 text-white'
-                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                        ? 'bg-slate-900 text-white border-2 border-slate-900'
+                        : 'bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200'
                     }`}
                     disabled={isSubmitting}
                   >
@@ -232,10 +240,10 @@ export default function ReunionModal({
                   </button>
                   <button
                     onClick={() => setUbicacion('virtual')}
-                    className={`flex-1 px-3 py-2 text-xs font-bold rounded-lg transition-colors ${
+                    className={`flex-1 px-3 py-2 text-xs font-bold rounded-lg transition-all ${
                       ubicacion === 'virtual'
-                        ? 'bg-slate-900 text-white'
-                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                        ? 'bg-slate-900 text-white border-2 border-slate-900'
+                        : 'bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200'
                     }`}
                     disabled={isSubmitting}
                   >
@@ -243,66 +251,72 @@ export default function ReunionModal({
                   </button>
                 </div>
               </div>
+            </div>
 
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                  <User size={14} /> Tomador de Decisiones *
-                </label>
-                <DecisionMakersForm
-                  leadId={leadId}
-                  readOnly={true}
-                />
-                <select
-                  value={decisionMakerId || ''}
-                  onChange={(e) => {
-                    setDecisionMakerId(e.target.value || null);
-                    if (error) setError(null);
-                  }}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+            {/* Tomadores de Decisiones Section */}
+            <div className="space-y-4 bg-white p-4 rounded-lg border border-slate-200">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-bold text-slate-600 uppercase">Responsables</h4>
+                <button
+                  type="button"
+                  className="flex items-center gap-1 px-2 py-1 text-xs font-bold text-slate-700 hover:bg-slate-100 rounded transition-colors"
                   disabled={isSubmitting}
                 >
-                  <option value="">Selecciona un tomador de decisiones</option>
-                  {/* Options will be populated from lead_decision_makers */}
-                </select>
-              </div>
-            </>
-          )}
-
-          {/* Step 2: Context */}
-          {step === 'context' && (
-            <>
-              <div className="bg-slate-50 p-3 rounded-lg text-xs space-y-1">
-                <div>
-                  <span className="font-bold text-slate-700">Fecha:</span>
-                  <span className="text-slate-600 ml-2">{fechaReunion} a las {horaReunion}</span>
-                </div>
-                <div>
-                  <span className="font-bold text-slate-700">Tipo:</span>
-                  <span className="text-slate-600 ml-2 capitalize">{ubicacion}</span>
-                </div>
+                  + Agregar
+                </button>
               </div>
 
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-700">
-                  ¿Qué se discutirá en esta reunión? *
+              <DecisionMakersForm leadId={leadId} readOnly={true} />
+
+              {/* Listado de seleccionados */}
+              {decisionMakersSeleccionados.length > 0 && (
+                <div className="space-y-2 pt-2 border-t border-slate-200">
+                  {decisionMakersSeleccionados.map((dm) => (
+                    <div key={dm.id} className="flex items-start justify-between p-2 bg-blue-50 rounded-lg border border-blue-200">
+                      <div>
+                        <p className="text-xs font-bold text-slate-900">{dm.nombre}</p>
+                        <p className="text-[10px] text-slate-600">{dm.cargo}</p>
+                      </div>
+                      <button
+                        onClick={() => setDecisionMakersSeleccionados(decisionMakersSeleccionados.filter(d => d.id !== dm.id))}
+                        className="text-slate-400 hover:text-red-600 transition-colors"
+                        disabled={isSubmitting}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Comentarios / Contexto Section */}
+            <div className="space-y-4 bg-white p-4 rounded-lg border border-slate-200">
+              <h4 className="text-xs font-bold text-slate-600 uppercase">Notas & Decisiones</h4>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-2">
+                  Contexto & Objetivos *
                 </label>
                 <textarea
+                  ref={contextoRef}
                   value={contexto}
                   onChange={(e) => {
                     setContexto(e.target.value);
-                    if (error) setError(null);
+                    if (error?.includes('Contexto')) setError(null);
                   }}
-                  placeholder="Describe el contexto y objetivos de la reunión (mínimo 20 caracteres)..."
+                  placeholder="Describe el contexto, objetivos y expectativas de la reunión (mínimo 20 caracteres)..."
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 resize-none"
                   rows={4}
                   disabled={isSubmitting}
+                  maxLength={500}
                 />
-                <p className="text-[10px] text-slate-400">
-                  {contexto.length}/300
+                <p className="text-[10px] text-slate-500 mt-1">
+                  {contexto.length}/500 (mínimo 20)
                 </p>
               </div>
-            </>
-          )}
+            </div>
+          </div>
 
           {/* Error */}
           {error && (
@@ -314,42 +328,22 @@ export default function ReunionModal({
         </div>
 
         {/* Footer */}
-        <div className="flex gap-2 p-4 bg-slate-50 border-t border-slate-200">
-          {step === 'context' && (
-            <button
-              onClick={() => setStep('calendar')}
-              disabled={isSubmitting}
-              className="flex-1 px-4 py-2 text-sm font-bold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
-            >
-              Atrás
-            </button>
-          )}
+        <div className="flex gap-2 p-4 bg-slate-50 border-t border-slate-200 sticky bottom-0">
           <button
             onClick={onClose}
             disabled={isSubmitting}
-            className="flex-1 px-4 py-2 text-sm font-bold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
+            className="flex-1 px-4 py-2 text-sm font-bold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-100 transition-all disabled:opacity-50"
           >
             Cancelar
           </button>
-          {step === 'calendar' && (
-            <button
-              onClick={handleNextStep}
-              disabled={!fechaReunion || !horaReunion || !decisionMakerId || isSubmitting}
-              className="flex-1 px-4 py-2 text-sm font-bold text-white bg-slate-900 rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-50"
-            >
-              Siguiente
-            </button>
-          )}
-          {step === 'context' && (
-            <button
-              onClick={handleSaveReunion}
-              disabled={!contexto.trim() || contexto.length < 20 || isSubmitting}
-              className="flex-1 px-4 py-2 text-sm font-bold text-white bg-slate-900 rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              {isSubmitting && <Loader2 size={14} className="animate-spin" />}
-              Guardar y Finalizar
-            </button>
-          )}
+          <button
+            onClick={handleSaveReunion}
+            disabled={!fechaReunion || !horaReunion || decisionMakersSeleccionados.length === 0 || !contexto.trim() || contexto.length < 20 || isSubmitting}
+            className="flex-1 px-4 py-2 text-sm font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : null}
+            Calendarizar Reunión
+          </button>
         </div>
       </div>
     </div>

@@ -50,6 +50,9 @@ export default function LeadsKanban({ leads, states, stages, onRefresh }: LeadsK
 
   const filteredLeads = useMemo(() => {
     return leads.filter((l) => {
+      // Excluir leads descartados del pipeline
+      if (l.status === 'descartado') return false;
+
       const matchesSearch =
         l.business_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         l.business_type.toLowerCase().includes(searchTerm.toLowerCase());
@@ -62,13 +65,14 @@ export default function LeadsKanban({ leads, states, stages, onRefresh }: LeadsK
   const leadsWithValidStatus = useMemo(() => {
     const stageClavesSet = new Set(stages.map(s => s.clave));
     const firstStage = stages.length > 0 ? stages[0] : DEFAULTS[0];
+    const firstStageId = 'clave' in firstStage ? firstStage.clave : firstStage.value;
 
     return filteredLeads.map(lead => {
       const hasValidStatus = stageClavesSet.has(lead.status);
       if (!hasValidStatus) {
         // Reasignar a la primera etapa
-        supabase.from('leads').update({ status: firstStage.clave || 'prospecto' }).eq('id', lead.id).then(() => onRefresh());
-        return { ...lead, status: firstStage.clave || 'prospecto', statusReset: true };
+        supabase.from('leads').update({ status: firstStageId }).eq('id', lead.id).then(() => onRefresh());
+        return { ...lead, status: firstStageId, statusReset: true };
       }
       return lead;
     });
@@ -255,14 +259,14 @@ export default function LeadsKanban({ leads, states, stages, onRefresh }: LeadsK
                       },
                     };
 
-                    const config = buttonConfig[leadStage.tipo as keyof typeof buttonConfig];
-                    if (!config) return null;
+                    const config = leadStage.tipo ? buttonConfig[leadStage.tipo as keyof typeof buttonConfig] : null;
+                    if (!config || !leadStage.tipo) return null;
 
                     return (
                       <button
                         onClick={() => {
                           setSelectedLeadId(lead.id);
-                          setSelectedStageType(leadStage.tipo);
+                          setSelectedStageType(leadStage.tipo!);
                           setIsStageModalOpen(true);
                         }}
                         className={`w-full mt-2 flex items-center justify-center gap-1.5 py-1.5 px-2 text-[10px] font-bold text-white ${config.bgColor} rounded-lg transition-colors`}
