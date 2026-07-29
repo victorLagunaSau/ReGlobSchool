@@ -1023,25 +1023,31 @@ export default function ContactAttemptModal({
                 </>
               )}
 
-              {/* Progress bar with information - After actions */}
+              {/* Progress & Result Card - Only for contacto type */}
               {stages?.[0]?.tipo === 'contacto' && (
-                <div className="space-y-2 pb-4 border-b border-slate-200">
-                  <p className="text-xs font-bold text-slate-600 uppercase">Progreso de Intentos</p>
-                  <div className="w-full bg-slate-200 rounded-full h-2">
-                    <div
-                      className="bg-blue-600 h-2 rounded-full transition-all"
-                      style={{ width: `${(attemptNumber / maxAttempts) * 100}%` }}
-                    />
+                <div className="space-y-4 bg-white p-4 rounded-lg border border-slate-200">
+                  {/* Progress bar with information */}
+                  <div className="space-y-2">
+                    <p className="text-xs font-bold text-slate-600 uppercase">Progreso de Intentos</p>
+                    <div className="w-full bg-slate-200 rounded-full h-2">
+                      <div
+                        className={`h-2 rounded-full transition-all ${
+                          attemptNumber >= maxAttempts * 0.75
+                            ? 'bg-red-600'
+                            : attemptNumber >= maxAttempts * 0.5
+                            ? 'bg-yellow-500'
+                            : 'bg-green-500'
+                        }`}
+                        style={{ width: `${(attemptNumber / maxAttempts) * 100}%` }}
+                      />
+                    </div>
+                    <p className="text-[10px] text-slate-500">
+                      {attemptNumber} de {maxAttempts} intentos realizados
+                    </p>
                   </div>
-                  <p className="text-[10px] text-slate-500">
-                    {attemptNumber} de {maxAttempts} intentos realizados
-                  </p>
-                </div>
-              )}
 
-              {/* Result Buttons - All 3 together - Only for contacto type */}
-              {stages?.[0]?.tipo === 'contacto' && (
-                <div className="space-y-2">
+                  {/* Result Buttons - All 3 together */}
+                  <div className="space-y-2">
                   <p className="text-xs font-bold text-slate-600 uppercase">Resultado del Intento</p>
                   <div className="grid grid-cols-3 gap-2">
                     <button
@@ -1095,6 +1101,7 @@ export default function ContactAttemptModal({
                       Puedes descartar después del intento 2
                     </p>
                   )}
+                  </div>
                 </div>
               )}
 
