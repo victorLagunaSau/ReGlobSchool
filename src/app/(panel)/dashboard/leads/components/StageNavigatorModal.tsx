@@ -1,9 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import InitialCampaignModal from './InitialCampaignModal';
-import ContactAttemptModal from './ContactAttemptModal';
-import ReunionModal from './ReunionModal';
+import StageModal from './StageModal';
 
 interface PipelineStage {
   id: string;
@@ -23,6 +21,11 @@ interface StageNavigatorModalProps {
   onRefresh: () => void;
 }
 
+/**
+ * StageNavigatorModal
+ * Detecta la etapa actual del lead y abre StageModal universal
+ * StageModal cargará dinámicamente las herramientas y accionables
+ */
 export default function StageNavigatorModal({
   isOpen,
   leadId,
@@ -31,83 +34,37 @@ export default function StageNavigatorModal({
   onClose,
   onRefresh,
 }: StageNavigatorModalProps) {
-  const [currentStageType, setCurrentStageType] = useState<string | null>(null);
+  const [currentStageClave, setCurrentStageClave] = useState<string | null>(null);
   const [initialStageSet, setInitialStageSet] = useState(false);
 
-  // Detectar la etapa actual del lead solo cuando se abre el modal
+  // Detectar la etapa actual del lead por su status (clave)
   useEffect(() => {
     if (isOpen && !initialStageSet && lead?.status && stages.length > 0) {
-      const currentStage = stages.find(s => s.clave === lead.status);
-      if (currentStage?.tipo) {
-        setCurrentStageType(currentStage.tipo);
-        setInitialStageSet(true);
-      }
+      setCurrentStageClave(lead.status);
+      setInitialStageSet(true);
     }
   }, [isOpen]);
-
-  const handleStageChange = (nextStageType: string) => {
-    setCurrentStageType(nextStageType);
-    onRefresh();
-  };
 
   // Reset when modal closes
   useEffect(() => {
     if (!isOpen) {
-      setCurrentStageType(null);
+      setCurrentStageClave(null);
       setInitialStageSet(false);
     }
   }, [isOpen]);
 
-  const currentStage = stages.find(s => s.tipo === currentStageType);
+  const currentStage = stages.find(s => s.clave === currentStageClave);
 
   if (!isOpen || !currentStage) return null;
 
-  // Renderizar el módulo correspondiente a la etapa actual
-  switch (currentStageType) {
-    case 'inicial':
-      return (
-        <InitialCampaignModal
-          isOpen={isOpen}
-          lead={lead}
-          stage={currentStage}
-          onClose={onClose}
-          onCampaignStarted={() => {
-            handleStageChange('contacto');
-          }}
-        />
-      );
-
-    case 'contacto':
-    case 'reagendar':
-      return (
-        <ContactAttemptModal
-          isOpen={isOpen}
-          leadId={leadId}
-          lead={lead}
-          stages={[currentStage]}
-          onClose={onClose}
-          onTaskResolved={onRefresh}
-          onSuccessWithNextStage={(nextStageType: string) => {
-            handleStageChange(nextStageType);
-          }}
-        />
-      );
-
-    case 'reunion':
-      return (
-        <ReunionModal
-          isOpen={isOpen}
-          leadId={leadId}
-          lead={lead}
-          stage={currentStage}
-          onClose={onClose}
-          onSuccess={() => {
-            handleStageChange('cierre');
-          }}
-        />
-      );
-
-    default:
-      return null;
-  }
+  return (
+    <StageModal
+      isOpen={isOpen}
+      leadId={leadId}
+      lead={lead}
+      stage={currentStage}
+      onClose={onClose}
+      onSuccess={onRefresh}
+    />
+  );
 }

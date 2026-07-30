@@ -37,16 +37,75 @@ export default function CalendarizeAction({
     setError(null);
 
     try {
-      const { error } = await supabase
+      // Obtener el siguiente stage (orden 2)
+      const { data: stagesData, error: stagesError } = await supabase
+        .from('pipeline_stages')
+        .select('clave')
+        .eq('orden', 2)
+        .single();
+
+      if (stagesError) throw stagesError;
+      const nextStageClave = stagesData?.clave || 'llamada';
+
+      // Crear tarea de contacto inicial
+      const { data: taskData, error: taskError } = await supabase
+        .from('lead_tasks')
+        .insert({
+          lead_id: leadId,
+          task_type: 'contacto_inicial',
+          channel: null,
+          attempt_number: 1,
+          status: 'pendiente',
+          scheduled_for: startDate,
+        })
+        .select()
+        .single();
+
+      if (taskError) throw taskError;
+
+      // Guardar nota de intento
+      const { error: noteError } = await supabase
+        .from('lead_attempt_notes')
+        .insert({
+          lead_id: leadId,
+          stage_clave: '101',
+          stage_titulo: 'Etapa 1 - Inicio de Campaña',
+          attempt_number: 1,
+          note_type: 'attempt',
+          note_text: notes.trim(),
+        });
+
+      if (noteError) throw noteError;
+
+      // Actualizar estado del lead
+      const { error: leadError } = await supabase
         .from('leads')
-        .update({ status: '102' })
+        .update({ status: nextStageClave })
         .eq('id', leadId);
 
-      if (error) throw error;
+      if (leadError) throw leadError;
+
+      // Registrar interacción
+      const { error: interactionError } = await supabase
+        .from('lead_interactions')
+        .insert({
+          lead_id: leadId,
+          interaction_type: 'task_outcome',
+          actor_id: (await supabase.auth.getUser()).data.user?.id,
+          action_label: 'Campaña iniciada',
+          message: `Campaña iniciada para ${startDate}: ${notes.trim()}`,
+          metadata: {
+            task_id: taskData?.id,
+            start_date: startDate,
+          },
+        });
+
+      if (interactionError) throw interactionError;
+
       onSuccess();
     } catch (err) {
-      console.error('Error al calendarizar:', err);
-      setError(`Error al iniciar campaña. Intenta de nuevo.`);
+      console.error('Error creating campaign task:', err);
+      setError('Error al iniciar campaña. Intenta de nuevo.');
     } finally {
       setIsLoading(false);
     }
