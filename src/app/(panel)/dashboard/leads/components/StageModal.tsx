@@ -82,7 +82,7 @@ export default function StageModal({
   // Estado de contactos
   const [contacts, setContacts] = useState<any[]>([]);
 
-  // Estado local de stage (se actualiza cuando el lead avanza)
+  // Estado local de stage - actualizar cuando prop stage cambia
   const [currentStage, setCurrentStage] = useState(stage);
 
   // Estado para agregar contactos generales
@@ -105,46 +105,12 @@ export default function StageModal({
     }
   }, [isOpen, leadId]);
 
-  // Recargar stage cada 500ms para detectar cambios de etapa en tiempo real
+  // Actualizar stage cuando la prop cambia (detectar cambios en tiempo real)
   useEffect(() => {
-    if (!isOpen) return;
-
-    const interval = setInterval(() => {
-      reloadLeadStage();
-    }, 500);
-
-    return () => clearInterval(interval);
-  }, [isOpen, leadId, currentStage?.clave]);
-
-  const reloadLeadStage = async () => {
-    try {
-      const { data: updatedLead, error: leadError } = await supabase
-        .from('leads')
-        .select('status')
-        .eq('id', leadId)
-        .single();
-
-      if (leadError) throw leadError;
-
-      if (updatedLead && updatedLead.status !== currentStage?.clave) {
-        // El lead cambió de etapa, cargar la nueva etapa
-        const { data: stageData, error: stageError } = await supabase
-          .from('stages')
-          .select('id, clave, titulo, orden, tipo')
-          .eq('clave', updatedLead.status)
-          .single();
-
-        if (stageError) throw stageError;
-
-        if (stageData) {
-          setCurrentStage(stageData);
-          // El modal se mantiene abierto, solo refrescar el contenido
-        }
-      }
-    } catch (err) {
-      console.error('Error reloading lead stage:', err);
+    if (stage && stage.clave !== currentStage?.clave) {
+      setCurrentStage(stage);
     }
-  };
+  }, [stage]);
 
   const loadAttemptNotes = async () => {
     setLoadingNotes(true);
