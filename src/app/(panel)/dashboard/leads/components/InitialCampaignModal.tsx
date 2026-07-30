@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import { X, Loader2, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase } from '../../../../../lib/supabase/client';
+import CalendarizeAction from '../actions/CalendarizeAction';
 
 interface InitialCampaignModalProps {
   isOpen: boolean;
@@ -32,6 +33,7 @@ export default function InitialCampaignModal({
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notes, setNotes] = useState('');
 
   if (!isOpen || !lead) return null;
 
@@ -268,6 +270,22 @@ export default function InitialCampaignModal({
               <p className="text-xs text-rose-700">{error}</p>
             </div>
           )}
+
+          {/* Notas & Decisiones */}
+          <div className="space-y-3 border-t pt-6">
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">
+              Notas & Decisiones
+            </label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Describe lo que sucedió..."
+              maxLength={500}
+              rows={3}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs resize-none focus:outline-slate-400"
+            />
+            <p className="text-[10px] text-slate-600">{notes.length}/500</p>
+          </div>
         </div>
 
         {/* Footer */}
@@ -279,14 +297,18 @@ export default function InitialCampaignModal({
           >
             Cerrar
           </button>
-          <button
-            onClick={handleContinue}
-            disabled={!startDate || isSubmitting}
-            className="flex-1 px-4 py-2 text-sm font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            {isSubmitting && <Loader2 size={14} className="animate-spin" />}
-            Calendarizar
-          </button>
+          <div className="flex-1">
+            <CalendarizeAction
+              leadId={lead.id}
+              startDate={startDate}
+              notes={notes}
+              onSuccess={() => {
+                onCampaignStarted?.();
+                onClose();
+              }}
+              isSubmitting={isSubmitting}
+            />
+          </div>
         </div>
       </div>
     </div>
