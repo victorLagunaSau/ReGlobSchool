@@ -12,7 +12,7 @@ interface ContinueActionProps {
   nextStageClave: string;
   nextStageTitle: string;
   notes: string;
-  onSuccess: (shouldClose?: boolean) => void;
+  onSuccess: (shouldClose?: boolean) => void | Promise<void>;
   compact?: boolean;
   currentAttempts?: number;
   minAttempts?: number;
@@ -96,7 +96,7 @@ export default function ContinueAction({
 
       if (interactionError) throw interactionError;
 
-      onSuccess(); // Llamar sin parámetros para ejecutar el callback normal (refrescar Kanban)
+      onSuccess(false); // Pasar false para NO cerrar el modal, permitiendo agendar siguiente paso
     } catch (err: any) {
       console.error('Error continuing to next stage:', err);
       const errorMsg = err?.message || err?.error_description || JSON.stringify(err);

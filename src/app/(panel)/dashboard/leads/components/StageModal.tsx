@@ -105,6 +105,17 @@ export default function StageModal({
     }
   }, [isOpen, leadId]);
 
+  // Recargar stage cada 500ms para detectar cambios de etapa en tiempo real
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const interval = setInterval(() => {
+      reloadLeadStage();
+    }, 500);
+
+    return () => clearInterval(interval);
+  }, [isOpen, leadId, currentStage?.clave]);
+
   const reloadLeadStage = async () => {
     try {
       const { data: updatedLead, error: leadError } = await supabase
@@ -321,7 +332,7 @@ export default function StageModal({
     try {
       await new Promise((resolve) => setTimeout(resolve, 500));
       onSuccess?.();
-      onClose();
+      if (shouldClose) onClose();
     } catch (err) {
       console.error('Error:', err);
       setError('Error al procesar');

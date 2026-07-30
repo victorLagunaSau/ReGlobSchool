@@ -17,7 +17,7 @@ interface Etapa2ActionsProps {
   stageClave?: string;
   nextStageClave?: string;
   nextStageTitle?: string;
-  onSuccess?: () => void;
+  onSuccess?: (shouldClose?: boolean) => void;
 }
 
 export default function Etapa2Actions({
@@ -99,8 +99,8 @@ export default function Etapa2Actions({
           nextStageClave={nextStageClave}
           nextStageTitle={nextStageTitle}
           notes={notes}
-          onSuccess={() => {
-            onSuccess?.();
+          onSuccess={(shouldClose) => {
+            onSuccess?.(shouldClose);
           }}
           compact={true}
           currentAttempts={currentAttempts}
@@ -123,7 +123,7 @@ export default function Etapa2Actions({
           maxAttempts={maxAttempts}
           onSuccess={() => {
             setShowRetryOptions(false);
-            onSuccess?.();
+            onSuccess?.(true);
           }}
           onCancel={() => {
             setShowRetryOptions(false);
@@ -144,7 +144,7 @@ export default function Etapa2Actions({
           maxAttempts={maxAttempts}
           onSuccess={() => {
             setShowDeleteConfirm(false);
-            onSuccess?.();
+            onSuccess?.(true);
           }}
           onCancel={() => setShowDeleteConfirm(false)}
         />
