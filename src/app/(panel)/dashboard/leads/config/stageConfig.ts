@@ -19,8 +19,8 @@ export const stageConfig: Record<StageClave, StageToolConfig> = {
 
   // Etapa 2 - Contacto (Contacto Inicial)
   '102': {
-    tools: ['phones', 'emails', 'progress-bar'],
-    actions: 'contact-outcome',
+    tools: ['contact-channel'],
+    actions: 'contact-attempt',
   },
 
   // Etapa 3 - Reunión (Reunión de Demostración)

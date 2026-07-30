@@ -1,16 +1,19 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, Loader2, Info, Building2, FileText, Phone, Mail, MapPin } from 'lucide-react';
+import { X, Loader2, Info, Building2, FileText, Phone, Mail, MapPin, Plus } from 'lucide-react';
 import { supabase } from '../../../../../lib/supabase/client';
 import { getStageConfig } from '../config/stageConfig';
 import DecisionMakersForm from './DecisionMakersForm';
 
 // Herramientas
 import CalendarTool from '../tools/CalendarTool';
+import ContactChannelSelector from '../tools/ContactChannelSelector';
 
 // Accionables
 import CalendarizeAction from '../actions/CalendarizeAction';
+import ContactAttemptAction from '../actions/ContactAttemptAction';
+
 
 interface AttemptNote {
   id: string;
@@ -62,15 +65,36 @@ export default function StageModal({
   // Estado de herramientas
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [notes, setNotes] = useState('');
+  const [selectedPhone, setSelectedPhone] = useState<string | null>(lead?.phone || null);
+  const [selectedPhoneName, setSelectedPhoneName] = useState<string>('Teléfono Principal');
+  const [selectedEmail, setSelectedEmail] = useState<string | null>(lead?.email || null);
+  const [selectedEmailName, setSelectedEmailName] = useState<string>('Email Principal');
+  const [contactOutcome, setContactOutcome] = useState<'no_contactado' | 'contacto_establecido' | 'reunion_agendada'>('no_contactado');
 
   // Estado de comentarios anteriores
   const [attemptNotes, setAttemptNotes] = useState<AttemptNote[]>([]);
   const [loadingNotes, setLoadingNotes] = useState(true);
 
-  // Cargar notas anteriores
+  // Estado de contactos
+  const [contacts, setContacts] = useState<any[]>([]);
+
+  // Estado para agregar contactos generales
+  const [showAddContactModal, setShowAddContactModal] = useState(false);
+  const [newContactName, setNewContactName] = useState('');
+  const [newContactCargo, setNewContactCargo] = useState('');
+  const [newContactPhone, setNewContactPhone] = useState('');
+  const [newContactEmail, setNewContactEmail] = useState('');
+  const [isAddingContact, setIsAddingContact] = useState(false);
+
+  // Estado para registrar llamadas/emails
+  const [isRegisteringCall, setIsRegisteringCall] = useState(false);
+  const [isRegisteringEmail, setIsRegisteringEmail] = useState(false);
+
+  // Cargar notas anteriores y contactos
   useEffect(() => {
     if (isOpen && leadId) {
       loadAttemptNotes();
+      loadContacts();
     }
   }, [isOpen, leadId]);
 
@@ -92,9 +116,33 @@ export default function StageModal({
     }
   };
 
+  const loadContacts = async () => {
+    try {
+      const { data, error: err } = await supabase
+        .from('lead_contacts')
+        .select('id, nombre, telefono, email')
+        .eq('lead_id', leadId);
+
+      if (err) throw err;
+      setContacts(data || []);
+    } catch (err) {
+      console.error('Error loading contacts:', err);
+    }
+  };
+
   if (!isOpen || !lead || !stage) return null;
 
   const stageConfig = getStageConfig(stage.clave);
+
+  // Títulos dinámicos según la etapa
+  const stageTitles: Record<string, string> = {
+    '101': 'Herramientas de la Etapa',
+    '102': 'Datos de Contacto',
+    '103': 'Herramientas de la Etapa',
+    '104': 'Herramientas de la Etapa',
+  };
+
+  const toolsTitle = stageTitles[stage.clave] || 'Herramientas de la Etapa';
 
   if (!stageConfig) {
     return (
@@ -113,6 +161,112 @@ export default function StageModal({
       </div>
     );
   }
+
+  const handleRegisterCall = async () => {
+    if (!selectedPhone) {
+      alert('Selecciona un teléfono para registrar la llamada');
+      return;
+    }
+
+    setIsRegisteringCall(true);
+    try {
+      const now = new Date();
+      const noteText = `${selectedPhoneName}\n${selectedPhone}\n${now.toLocaleString('es-ES')}`;
+
+      const { error } = await supabase
+        .from('lead_attempt_notes')
+        .insert({
+          lead_id: leadId,
+          stage_clave: stage.clave,
+          stage_titulo: stage.titulo,
+          attempt_number: 1,
+          note_type: 'attempt',
+          note_text: noteText,
+        });
+
+      if (error) throw error;
+      loadAttemptNotes();
+    } catch (err) {
+      console.error('Error registering call:', err);
+      alert('Error al registrar llamada');
+    } finally {
+      setIsRegisteringCall(false);
+    }
+  };
+
+  const handleRegisterEmail = async () => {
+    if (!selectedEmail) {
+      alert('Selecciona un email para registrar');
+      return;
+    }
+
+    setIsRegisteringEmail(true);
+    try {
+      const now = new Date();
+      const noteText = `${selectedEmailName}\n${selectedEmail}\n${now.toLocaleString('es-ES')}`;
+
+      const { error } = await supabase
+        .from('lead_attempt_notes')
+        .insert({
+          lead_id: leadId,
+          stage_clave: stage.clave,
+          stage_titulo: stage.titulo,
+          attempt_number: 1,
+          note_type: 'attempt',
+          note_text: noteText,
+        });
+
+      if (error) throw error;
+      loadAttemptNotes();
+    } catch (err) {
+      console.error('Error registering email:', err);
+      alert('Error al registrar email');
+    } finally {
+      setIsRegisteringEmail(false);
+    }
+  };
+
+  const handleAddContact = async () => {
+    if (!newContactName.trim()) {
+      alert('El nombre es requerido');
+      return;
+    }
+
+    if (!newContactPhone.trim() && !newContactEmail.trim()) {
+      alert('Agrega al menos un teléfono o email');
+      return;
+    }
+
+    setIsAddingContact(true);
+    try {
+      const tipo = !newContactPhone.trim() && newContactEmail.trim() ? 'email' : 'telefono';
+      const { error } = await supabase
+        .from('lead_contacts')
+        .insert({
+          lead_id: leadId,
+          nombre: newContactName.trim(),
+          cargo: newContactCargo.trim() || null,
+          telefono: newContactPhone.trim() || null,
+          email: newContactEmail.trim() || null,
+          tipo: tipo,
+          source: 'manual',
+          es_tomador_decision: false,
+        });
+
+      if (error) throw error;
+
+      setNewContactName('');
+      setNewContactCargo('');
+      setNewContactPhone('');
+      setNewContactEmail('');
+      setShowAddContactModal(false);
+    } catch (err) {
+      console.error('Error adding contact:', err);
+      alert('Error al agregar contacto');
+    } finally {
+      setIsAddingContact(false);
+    }
+  };
 
   const handleSuccess = async () => {
     setIsSubmitting(true);
@@ -176,13 +330,46 @@ export default function StageModal({
 
             {/* Herramientas Dinámicas */}
             <div className="space-y-6">
-              <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide">
-                Herramientas de la Etapa
-              </h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide">
+                  {toolsTitle}
+                </h3>
+                {stageConfig.tools.includes('contact-channel') && (
+                  <button
+                    onClick={() => setShowAddContactModal(true)}
+                    className="flex items-center gap-1 px-3 py-1 text-xs font-bold text-slate-700 hover:bg-slate-100 rounded transition-colors"
+                  >
+                    <Plus size={14} /> Agregar Contacto
+                  </button>
+                )}
+              </div>
 
               {stageConfig.tools.includes('calendar') && (
                 <CalendarTool value={selectedDate} onChange={setSelectedDate} />
               )}
+
+              {stageConfig.tools.includes('contact-channel') && (
+                <ContactChannelSelector
+                  leadId={leadId}
+                  selectedPhone={selectedPhone}
+                  selectedEmail={selectedEmail}
+                  onPhoneSelect={(phone, name) => {
+                    setSelectedPhone(phone);
+                    setSelectedPhoneName(name);
+                  }}
+                  onEmailSelect={(email, name) => {
+                    setSelectedEmail(email);
+                    setSelectedEmailName(name);
+                  }}
+                  phone={lead.phone}
+                  email={lead.email}
+                  onRegisterCall={handleRegisterCall}
+                  onRegisterEmail={handleRegisterEmail}
+                  isRegisteringCall={isRegisteringCall}
+                  isRegisteringEmail={isRegisteringEmail}
+                />
+              )}
+
 
               {stageConfig.tools.length === 0 && (
                 <p className="text-xs text-slate-400 italic">Sin herramientas para esta etapa</p>
@@ -242,6 +429,18 @@ export default function StageModal({
                 />
               )}
 
+              {stageConfig.actions === 'contact-attempt' && (
+                <ContactAttemptAction
+                  leadId={leadId}
+                  selectedPhone={selectedPhone}
+                  selectedEmail={selectedEmail}
+                  outcome={contactOutcome}
+                  notes={notes}
+                  onSuccess={handleSuccess}
+                  isSubmitting={isSubmitting}
+                />
+              )}
+
               {!stageConfig.actions && (
                 <p className="text-xs text-slate-400 italic">Sin accionables para esta etapa</p>
               )}
@@ -263,6 +462,7 @@ export default function StageModal({
               </h3>
               {leadId && <DecisionMakersForm leadId={leadId} readOnly={false} />}
             </div>
+
 
             {/* Comentarios Anteriores */}
             <div className="flex-1 overflow-y-auto">
@@ -316,6 +516,76 @@ export default function StageModal({
           </div>
         </div>
       </div>
+
+      {/* Add Contact Modal */}
+      {showAddContactModal && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/40 z-40"
+            onClick={() => setShowAddContactModal(false)}
+          />
+          <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white rounded-2xl shadow-2xl border border-slate-200 z-50 max-w-sm w-[90vw]">
+            <div className="bg-slate-900 text-white px-6 py-4 flex items-center gap-3 border-b border-slate-800 rounded-t-2xl">
+              <Plus size={24} className="text-blue-400" />
+              <h3 className="text-lg font-bold">Agregar Contacto</h3>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <input
+                type="text"
+                placeholder="Nombre *"
+                value={newContactName}
+                onChange={(e) => setNewContactName(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                disabled={isAddingContact}
+                autoFocus
+              />
+              <input
+                type="text"
+                placeholder="Cargo"
+                value={newContactCargo}
+                onChange={(e) => setNewContactCargo(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                disabled={isAddingContact}
+              />
+              <input
+                type="tel"
+                placeholder="Teléfono"
+                value={newContactPhone}
+                onChange={(e) => setNewContactPhone(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                disabled={isAddingContact}
+              />
+              <input
+                type="email"
+                placeholder="Email"
+                value={newContactEmail}
+                onChange={(e) => setNewContactEmail(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                disabled={isAddingContact}
+              />
+
+              <div className="flex gap-2 pt-4 justify-end">
+                <button
+                  onClick={() => setShowAddContactModal(false)}
+                  disabled={isAddingContact}
+                  className="px-6 py-2 border border-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleAddContact}
+                  disabled={isAddingContact}
+                  className="px-6 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+                >
+                  {isAddingContact && <Loader2 size={14} className="animate-spin" />}
+                  Guardar
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Lead Info Popover */}
       {showLeadInfo && (
