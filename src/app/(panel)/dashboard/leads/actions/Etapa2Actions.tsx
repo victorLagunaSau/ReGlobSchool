@@ -38,7 +38,8 @@ export default function Etapa2Actions({
 
   const hasNotes = notes.trim().length >= 10;
   const canDelete = currentAttempts >= minAttempts;
-  const canRetry = currentAttempts < maxAttempts;
+  const canRetry = true; // Reintentar siempre disponible
+  const hasReachedMaxAttempts = currentAttempts >= maxAttempts;
 
   const handleDeleteClick = () => {
     if (!hasNotes) {
@@ -62,13 +63,13 @@ export default function Etapa2Actions({
         {/* ELIMINAR - 33% */}
         <button
           onClick={handleDeleteClick}
-          disabled={!canDelete || !hasNotes}
+          disabled={(!canDelete || !hasNotes) || showRetryOptions}
           className={`flex-1 px-2 py-3 text-sm font-bold rounded-lg flex flex-col items-center justify-center gap-1.5 transition-colors ${
-            !canDelete || !hasNotes
+            ((!canDelete || !hasNotes) || showRetryOptions)
               ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
               : 'bg-red-600 hover:bg-red-700 text-white'
           }`}
-          title={!canDelete ? `Requiere ${minAttempts} intentos mínimos` : !hasNotes ? 'Requiere comentario (mínimo 10 caracteres)' : ''}
+          title={!canDelete ? `Requiere ${minAttempts} intentos mínimos` : !hasNotes ? 'Requiere comentario (mínimo 10 caracteres)' : showRetryOptions ? 'Cancela Reintentar primero' : ''}
         >
           <Trash2 size={18} />
           <span>Eliminar</span>
@@ -77,13 +78,13 @@ export default function Etapa2Actions({
         {/* REINTENTAR - 33% */}
         <button
           onClick={handleRetryClick}
-          disabled={!hasNotes || !canRetry}
+          disabled={!hasNotes || showDeleteConfirm}
           className={`flex-1 px-2 py-3 text-sm font-bold rounded-lg flex flex-col items-center justify-center gap-1.5 transition-colors ${
-            !canRetry
+            (!hasNotes || showDeleteConfirm)
               ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
-              : 'bg-amber-600 hover:bg-amber-700 text-white disabled:opacity-50 disabled:cursor-not-allowed'
+              : 'bg-amber-600 hover:bg-amber-700 text-white'
           }`}
-          title={!canRetry ? `Máximo de intentos (${maxAttempts}) alcanzado. Solo puedes eliminar el lead.` : ''}
+          title={showDeleteConfirm ? 'Cancela Eliminar primero' : hasReachedMaxAttempts ? `Has alcanzado el máximo de intentos (${maxAttempts})` : ''}
         >
           <RotateCcw size={18} />
           <span>Reintentar</span>
@@ -105,6 +106,7 @@ export default function Etapa2Actions({
           currentAttempts={currentAttempts}
           minAttempts={minAttempts}
           maxAttempts={maxAttempts}
+          isDisabled={showDeleteConfirm || showRetryOptions}
         />
       </div>
 
@@ -122,6 +124,9 @@ export default function Etapa2Actions({
           onSuccess={() => {
             setShowRetryOptions(false);
             onSuccess?.();
+          }}
+          onCancel={() => {
+            setShowRetryOptions(false);
           }}
         />
       )}
@@ -141,6 +146,7 @@ export default function Etapa2Actions({
             setShowDeleteConfirm(false);
             onSuccess?.();
           }}
+          onCancel={() => setShowDeleteConfirm(false)}
         />
       )}
     </div>

@@ -14,6 +14,7 @@ interface RetryActionProps {
   minAttempts: number;
   maxAttempts: number;
   onSuccess: () => void;
+  onCancel?: () => void;
 }
 
 // Calcula días hábiles (excluyendo fines de semana)
@@ -49,11 +50,20 @@ export default function RetryAction({
   minAttempts,
   maxAttempts,
   onSuccess,
+  onCancel,
 }: RetryActionProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
   const hasNotes = notes.trim().length >= 10;
+
+  // Calcular fecha legible en español
+  const formatDateLong = (date: Date) => {
+    const days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+    const months = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+    return `${days[date.getDay()]} ${date.getDate()} de ${months[date.getMonth()]} del ${date.getFullYear()}`;
+  };
 
   const handleRetrySelect = async (days: number) => {
     if (!hasNotes) {
@@ -61,14 +71,16 @@ export default function RetryAction({
       return;
     }
 
+    // Calcular fecha primero (sin iniciar loading)
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const retryDate = addBusinessDays(tomorrow, days - 1); // -1 porque ya sumamos 1 día para mañana
+    setSelectedDate(retryDate);
+
     setIsLoading(true);
     setError(null);
 
     try {
-      // Calcular fecha de reintentar (mañana + días hábiles)
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const retryDate = addBusinessDays(tomorrow, days - 1); // -1 porque ya sumamos 1 día para mañana
 
       // Obtener el próximo número de intento
       const nextAttemptNumber = currentAttempts + 1;
@@ -132,24 +144,39 @@ export default function RetryAction({
         </div>
       )}
 
+      {selectedDate && (
+        <div className="p-3 bg-white border border-amber-300 rounded-lg">
+          <p className="text-xs text-amber-900 font-semibold">
+            Fecha seleccionada: <span className="text-amber-700">{formatDateLong(selectedDate)}</span>
+          </p>
+        </div>
+      )}
+
       <p className="text-xs font-semibold text-amber-900 mb-3">
         Selecciona cuándo reintentar:
       </p>
 
-      <div className="space-y-2">
+      <div className="grid grid-cols-4 gap-2 mb-3">
         {RETRY_OPTIONS.map((option) => (
           <button
             key={option.days}
             onClick={() => handleRetrySelect(option.days)}
             disabled={isLoading}
-            className="w-full px-3 py-2.5 text-sm font-bold text-white bg-amber-600 hover:bg-amber-700 transition-colors rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            className="px-2 py-2.5 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 transition-colors rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1"
           >
-            {isLoading && <Loader2 size={14} className="animate-spin" />}
-            <Calendar size={14} />
-            {option.label}
+            {isLoading && <Loader2 size={12} className="animate-spin" />}
+            <Calendar size={12} />
+            <span>{option.label}</span>
           </button>
         ))}
       </div>
+
+      <button
+        onClick={() => onCancel?.()}
+        className="w-full px-3 py-2 text-xs font-bold text-slate-700 bg-slate-200 hover:bg-slate-300 transition-colors rounded-lg"
+      >
+        Cancelar
+      </button>
     </div>
   );
 }

@@ -17,6 +17,7 @@ interface ContinueActionProps {
   currentAttempts?: number;
   minAttempts?: number;
   maxAttempts?: number;
+  isDisabled?: boolean;
 }
 
 export default function ContinueAction({
@@ -32,6 +33,7 @@ export default function ContinueAction({
   currentAttempts = 0,
   minAttempts = 0,
   maxAttempts = 0,
+  isDisabled = false,
 }: ContinueActionProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -105,16 +107,17 @@ export default function ContinueAction({
   };
 
   if (compact) {
+    const buttonDisabled = hasReachedMaxAttempts || !hasNotes || isDisabled;
     return (
       <button
         onClick={handleContinue}
-        disabled={isLoading || hasReachedMaxAttempts}
+        disabled={isLoading || buttonDisabled}
         className={`flex-1 px-2 py-3 text-sm font-bold rounded-lg flex flex-col items-center justify-center gap-1.5 transition-colors ${
-          hasReachedMaxAttempts
+          buttonDisabled
             ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
             : 'bg-green-600 hover:bg-green-700 text-white disabled:opacity-50 disabled:cursor-not-allowed'
         }`}
-        title={hasReachedMaxAttempts ? 'Límite máximo de intentos alcanzado. Solo puedes eliminar el lead.' : ''}
+        title={isDisabled ? 'Cancela la acción actual primero' : !hasNotes ? 'Requiere comentario (mínimo 10 caracteres)' : hasReachedMaxAttempts ? 'Límite máximo de intentos alcanzado. Solo puedes eliminar el lead.' : ''}
       >
         {isLoading ? <Loader2 size={18} className="animate-spin" /> : <ChevronRight size={18} />}
         <span>Avanzar</span>

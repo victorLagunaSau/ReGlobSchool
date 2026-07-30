@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Loader2, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Loader2, AlertCircle, Clock } from 'lucide-react';
 import { supabase } from '../../../../../lib/supabase/client';
 
 interface DeleteActionProps {
@@ -14,6 +14,7 @@ interface DeleteActionProps {
   minAttempts: number;
   maxAttempts: number;
   onSuccess: () => void;
+  onCancel?: () => void;
 }
 
 export default function DeleteAction({
@@ -26,12 +27,29 @@ export default function DeleteAction({
   minAttempts,
   maxAttempts,
   onSuccess,
+  onCancel,
 }: DeleteActionProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [secondsLeft, setSecondsLeft] = useState(8);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setSecondsLeft(prev => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
 
   const hasNotes = notes.trim().length >= 10;
   const canDelete = currentAttempts >= minAttempts && minAttempts > 0;
+  const canConfirm = canDelete && hasNotes && secondsLeft === 0;
 
   const handleDelete = async () => {
     if (!hasNotes) {
@@ -189,19 +207,44 @@ export default function DeleteAction({
         </div>
       )}
 
-      <button
-        onClick={handleDelete}
-        disabled={isLoading || !canDelete || !hasNotes}
-        className={`w-full px-3 py-2 text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-2 ${
-          !canDelete
-            ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
-            : 'bg-red-600 hover:bg-red-700 text-white disabled:opacity-50 disabled:cursor-not-allowed'
-        }`}
-        title={!canDelete ? 'No se puede eliminar. Requiere alcanzar el límite de intentos.' : ''}
-      >
-        {isLoading && <Loader2 size={14} className="animate-spin" />}
-        Confirmar Eliminación
-      </button>
+      {/* Advertencia de eliminación */}
+      <div className="flex items-start gap-2 p-3 bg-rose-50 border border-rose-200 rounded-lg mb-3">
+        <AlertCircle size={16} className="text-rose-600 flex-shrink-0 mt-0.5" />
+        <div className="flex-1">
+          <p className="text-xs font-bold text-rose-700 mb-1">Esta acción no tiene marcha atrás</p>
+          <p className="text-xs text-rose-600">El lead será eliminado permanentemente junto con todos sus contactos e historial.</p>
+        </div>
+      </div>
+
+      <div className="flex gap-2">
+        <button
+          onClick={onCancel}
+          className="flex-1 px-3 py-2 text-xs font-bold text-slate-700 bg-slate-200 hover:bg-slate-300 transition-colors rounded-lg"
+        >
+          Cancelar
+        </button>
+
+        <button
+          onClick={handleDelete}
+          disabled={isLoading || !canDelete || !hasNotes || !canConfirm}
+          className={`flex-1 px-3 py-2 text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-2 ${
+            !canConfirm
+              ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+              : 'bg-red-600 hover:bg-red-700 text-white disabled:opacity-50 disabled:cursor-not-allowed'
+          }`}
+          title={!canDelete ? 'No se puede eliminar. Requiere alcanzar el límite de intentos.' : secondsLeft > 0 ? `Disponible en ${secondsLeft}s` : ''}
+        >
+          {isLoading && <Loader2 size={14} className="animate-spin" />}
+          {secondsLeft > 0 ? (
+            <>
+              <Clock size={14} />
+              Confirmar en {secondsLeft}s
+            </>
+          ) : (
+            'Confirmar Eliminación'
+          )}
+        </button>
+      </div>
     </>
   );
 }
