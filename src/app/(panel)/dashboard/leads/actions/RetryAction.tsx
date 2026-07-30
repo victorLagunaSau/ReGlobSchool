@@ -1,0 +1,155 @@
+'use client';
+
+import React, { useState } from 'react';
+import { Loader2, AlertCircle, Calendar } from 'lucide-react';
+import { supabase } from '../../../../../lib/supabase/client';
+
+interface RetryActionProps {
+  leadId: string;
+  stageTitle: string;
+  stageNumber: string;
+  stageClave: string;
+  notes: string;
+  currentAttempts: number;
+  minAttempts: number;
+  maxAttempts: number;
+  onSuccess: () => void;
+}
+
+// Calcula días hábiles (excluyendo fines de semana)
+function addBusinessDays(startDate: Date, days: number): Date {
+  const result = new Date(startDate);
+  let count = 0;
+
+  while (count < days) {
+    result.setDate(result.getDate() + 1);
+    const dayOfWeek = result.getDay();
+    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+      count++;
+    }
+  }
+
+  return result;
+}
+
+const RETRY_OPTIONS = [
+  { label: 'En 1 día', days: 1 },
+  { label: 'En 3 días', days: 3 },
+  { label: 'En 5 días', days: 5 },
+  { label: 'En 8 días', days: 8 },
+];
+
+export default function RetryAction({
+  leadId,
+  stageTitle,
+  stageNumber,
+  stageClave,
+  notes,
+  currentAttempts,
+  minAttempts,
+  maxAttempts,
+  onSuccess,
+}: RetryActionProps) {
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const hasNotes = notes.trim().length >= 10;
+
+  const handleRetrySelect = async (days: number) => {
+    if (!hasNotes) {
+      alert('Requiere comentario (mínimo 10 caracteres)');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Calcular fecha de reintentar (mañana + días hábiles)
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const retryDate = addBusinessDays(tomorrow, days - 1); // -1 porque ya sumamos 1 día para mañana
+
+      // Obtener el próximo número de intento
+      const nextAttemptNumber = currentAttempts + 1;
+
+      // Auto-completar comentario con: título, número de etapa, fecha, número de intento
+      const retryDateFormatted = retryDate.toLocaleDateString('es-ES');
+      const autoCompletedNotes = `${notes}\n\n${stageTitle} (Etapa ${stageNumber})\nReintentar: ${retryDateFormatted}\nIntento: ${nextAttemptNumber}`;
+
+      // 1. Guardar nota de intento
+      const { error: noteError } = await supabase
+        .from('lead_attempt_notes')
+        .insert({
+          lead_id: leadId,
+          stage_clave: stageClave,
+          stage_titulo: stageTitle,
+          attempt_number: nextAttemptNumber,
+          note_type: 'retry',
+          note_text: autoCompletedNotes,
+        });
+
+      if (noteError) throw noteError;
+
+      // 2. Incrementar current_stage_attempts
+      const { error: updateError } = await supabase
+        .from('leads')
+        .update({ current_stage_attempts: nextAttemptNumber })
+        .eq('id', leadId);
+
+      if (updateError) throw updateError;
+
+      // 3. Crear tarea programada para la fecha de reintentar
+      const { error: taskError } = await supabase
+        .from('lead_tasks')
+        .insert({
+          lead_id: leadId,
+          task_type: 'seguimiento',
+          description: `Reintentar contacto - ${stageTitle}`,
+          scheduled_for: retryDate.toISOString(),
+          status: 'pendiente',
+        });
+
+      if (taskError) throw taskError;
+
+      onSuccess();
+    } catch (err: any) {
+      console.error('Error scheduling retry:', err);
+      const errorMsg = err?.message || err?.error_description || JSON.stringify(err);
+      console.error('Error details:', errorMsg);
+      setError(`Error: ${errorMsg}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-3 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+      {error && (
+        <div className="flex items-start gap-2 p-3 bg-rose-50 border border-rose-200 rounded-lg">
+          <AlertCircle size={14} className="text-rose-500 flex-shrink-0 mt-0.5" />
+          <p className="text-xs text-rose-700">{error}</p>
+        </div>
+      )}
+
+      <p className="text-xs font-semibold text-amber-900 mb-3">
+        Selecciona cuándo reintentar:
+      </p>
+
+      <div className="space-y-2">
+        {RETRY_OPTIONS.map((option) => (
+          <button
+            key={option.days}
+            onClick={() => handleRetrySelect(option.days)}
+            disabled={isLoading}
+            className="w-full px-3 py-2.5 text-sm font-bold text-white bg-amber-600 hover:bg-amber-700 transition-colors rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            {isLoading && <Loader2 size={14} className="animate-spin" />}
+            <Calendar size={14} />
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}

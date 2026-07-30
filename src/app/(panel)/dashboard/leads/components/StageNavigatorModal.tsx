@@ -10,6 +10,8 @@ interface PipelineStage {
   tipo?: string;
   orden?: number;
   siguiente_etapa_id?: string | null;
+  limite_pospuestas?: number;
+  intentos_requeridos?: number;
 }
 
 interface StageNavigatorModalProps {
@@ -37,7 +39,14 @@ export default function StageNavigatorModal({
   const [currentStageClave, setCurrentStageClave] = useState<string | null>(null);
   const [initialStageSet, setInitialStageSet] = useState(false);
 
-  // Detectar la etapa actual del lead por su status (clave)
+  // Callback que refrescar el Kanban sin cerrar el modal
+  const handleModalSuccess = () => {
+    // Notificar al padre para actualizar el Kanban
+    // pero NO cerrar el modal
+    onRefresh();
+  };
+
+  // Detectar la etapa actual del lead por su status (clave) SOLO AL ABRIR
   useEffect(() => {
     if (isOpen && !initialStageSet && lead?.status && stages.length > 0) {
       setCurrentStageClave(lead.status);

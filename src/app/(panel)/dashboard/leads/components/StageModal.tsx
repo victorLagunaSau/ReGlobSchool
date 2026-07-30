@@ -13,6 +13,7 @@ import ContactChannelSelector from '../tools/ContactChannelSelector';
 // Accionables
 import CalendarizeAction from '../actions/CalendarizeAction';
 import ContactAttemptAction from '../actions/ContactAttemptAction';
+import Etapa2Actions from '../actions/Etapa2Actions';
 
 
 interface AttemptNote {
@@ -44,6 +45,8 @@ interface StageModalProps {
     titulo: string;
     orden?: number;
     tipo?: string;
+    limite_pospuestas?: number;
+    intentos_requeridos?: number;
   } | null;
   onClose: () => void;
   onSuccess?: () => void;
@@ -74,9 +77,13 @@ export default function StageModal({
   // Estado de comentarios anteriores
   const [attemptNotes, setAttemptNotes] = useState<AttemptNote[]>([]);
   const [loadingNotes, setLoadingNotes] = useState(true);
+  const [currentAttempts, setCurrentAttempts] = useState(0);
 
   // Estado de contactos
   const [contacts, setContacts] = useState<any[]>([]);
+
+  // Estado local de stage (se actualiza cuando el lead avanza)
+  const [currentStage, setCurrentStage] = useState(stage);
 
   // Estado para agregar contactos generales
   const [showAddContactModal, setShowAddContactModal] = useState(false);
@@ -98,9 +105,40 @@ export default function StageModal({
     }
   }, [isOpen, leadId]);
 
+  const reloadLeadStage = async () => {
+    try {
+      const { data: updatedLead, error: leadError } = await supabase
+        .from('leads')
+        .select('status')
+        .eq('id', leadId)
+        .single();
+
+      if (leadError) throw leadError;
+
+      if (updatedLead && updatedLead.status !== currentStage?.clave) {
+        // El lead cambió de etapa, cargar la nueva etapa
+        const { data: stageData, error: stageError } = await supabase
+          .from('stages')
+          .select('id, clave, titulo, orden, tipo')
+          .eq('clave', updatedLead.status)
+          .single();
+
+        if (stageError) throw stageError;
+
+        if (stageData) {
+          setCurrentStage(stageData);
+          // El modal se mantiene abierto, solo refrescar el contenido
+        }
+      }
+    } catch (err) {
+      console.error('Error reloading lead stage:', err);
+    }
+  };
+
   const loadAttemptNotes = async () => {
     setLoadingNotes(true);
     try {
+      // Cargar notas históricas
       const { data, error: err } = await supabase
         .from('lead_attempt_notes')
         .select('id, stage_clave, stage_titulo, note_type, note_text, created_at')
@@ -109,6 +147,16 @@ export default function StageModal({
 
       if (err) throw err;
       setAttemptNotes(data || []);
+
+      // Cargar contador de intentos de la etapa actual desde leads
+      const { data: leadData, error: leadErr } = await supabase
+        .from('leads')
+        .select('current_stage_attempts')
+        .eq('id', leadId)
+        .single();
+
+      if (leadErr) throw leadErr;
+      setCurrentAttempts(leadData?.current_stage_attempts || 0);
     } catch (err) {
       console.error('Error loading attempt notes:', err);
     } finally {
@@ -130,9 +178,9 @@ export default function StageModal({
     }
   };
 
-  if (!isOpen || !lead || !stage) return null;
+  if (!isOpen || !lead || !currentStage) return null;
 
-  const stageConfig = getStageConfig(stage.clave);
+  const stageConfig = getStageConfig(currentStage.clave);
 
   // Títulos dinámicos según la etapa
   const stageTitles: Record<string, string> = {
@@ -142,7 +190,7 @@ export default function StageModal({
     '104': 'Herramientas de la Etapa',
   };
 
-  const toolsTitle = stageTitles[stage.clave] || 'Herramientas de la Etapa';
+  const toolsTitle = stageTitles[currentStage.clave] || 'Herramientas de la Etapa';
 
   if (!stageConfig) {
     return (
@@ -177,8 +225,8 @@ export default function StageModal({
         .from('lead_attempt_notes')
         .insert({
           lead_id: leadId,
-          stage_clave: stage.clave,
-          stage_titulo: stage.titulo,
+          stage_clave: currentStage.clave,
+          stage_titulo: currentStage.titulo,
           attempt_number: 1,
           note_type: 'attempt',
           note_text: noteText,
@@ -209,8 +257,8 @@ export default function StageModal({
         .from('lead_attempt_notes')
         .insert({
           lead_id: leadId,
-          stage_clave: stage.clave,
-          stage_titulo: stage.titulo,
+          stage_clave: currentStage.clave,
+          stage_titulo: currentStage.titulo,
           attempt_number: 1,
           note_type: 'attempt',
           note_text: noteText,
@@ -268,7 +316,7 @@ export default function StageModal({
     }
   };
 
-  const handleSuccess = async () => {
+  const handleSuccess = async (shouldClose = true) => {
     setIsSubmitting(true);
     try {
       await new Promise((resolve) => setTimeout(resolve, 500));
@@ -289,9 +337,9 @@ export default function StageModal({
         <div className="bg-slate-900 text-white p-6 border-b border-slate-800">
           <div className="flex items-start justify-between">
             <div>
-              <h2 className="text-lg font-bold">{stage.titulo}</h2>
+              <h2 className="text-lg font-bold">{currentStage.titulo}</h2>
               <p className="text-xs text-slate-300 mt-1">
-                Etapa {stage.orden} {stage.tipo && `- Tipo: ${stage.tipo.charAt(0).toUpperCase() + stage.tipo.slice(1)}`}
+                Etapa {currentStage.orden} {currentStage.tipo && `- Tipo: ${currentStage.tipo.charAt(0).toUpperCase() + currentStage.tipo.slice(1)}`}
               </p>
             </div>
             <button
@@ -376,16 +424,16 @@ export default function StageModal({
               )}
             </div>
 
-            {/* Notas & Decisiones */}
-            <div className="space-y-3 border-t pt-6">
+            {/* Comentarios de Actividad */}
+            <div className="space-y-3 mt-6">
               <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">
-                Notas & Decisiones
+                Comentarios de Actividad
                 <span className="text-rose-600 ml-1">*</span>
               </label>
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Describe lo que sucedió... (mínimo 10 caracteres)"
+                placeholder="Describe la actividad realizada... (mínimo 10 caracteres)"
                 maxLength={500}
                 rows={3}
                 className={`w-full px-3 py-2 border rounded-lg text-xs resize-none focus:outline-slate-400 transition-colors ${
@@ -413,31 +461,71 @@ export default function StageModal({
               </div>
             </div>
 
-            {/* Accionables */}
-            <div className="space-y-3 border-t pt-6">
+
+            {/* Acciones */}
+            <div className="space-y-3 mt-6">
               <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">
-                Accionables de la Etapa
+                Acciones:
               </label>
+
+              {(!notes.trim() || notes.trim().length < 10) && (
+                <div className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <Info size={14} className="text-blue-600 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs text-blue-700">Para continuar, deja tus comentarios de actividad en la sección anterior.</p>
+                </div>
+              )}
+
+              {/* Progreso de Intentos (solo para Etapa 2) */}
+              {currentStage.clave === '102' && currentStage.limite_pospuestas && (
+                <div className="space-y-2 mb-4">
+                  <p className="text-xs text-slate-700">
+                    Intentos <span className="font-bold text-slate-900">{currentAttempts} de {currentStage.limite_pospuestas}</span>
+                  </p>
+                  <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+                    {(() => {
+                      const progress = Math.min(
+                        (currentAttempts / currentStage.limite_pospuestas) * 100,
+                        100
+                      );
+                      let bgColor = 'bg-green-500';
+                      if (progress > 75) bgColor = 'bg-red-500';
+                      else if (progress > 50) bgColor = 'bg-orange-500';
+                      else if (progress > 25) bgColor = 'bg-amber-500';
+
+                      return (
+                        <div
+                          className={`h-full ${bgColor} transition-all duration-300`}
+                          style={{ width: `${progress}%` }}
+                        />
+                      );
+                    })()}
+                  </div>
+                </div>
+              )}
 
               {stageConfig.actions === 'calendarize' && (
                 <CalendarizeAction
                   leadId={leadId}
                   startDate={selectedDate}
                   notes={notes}
-                  onSuccess={handleSuccess}
+                  onSuccess={() => handleSuccess(true)}
                   isSubmitting={isSubmitting}
                 />
               )}
 
               {stageConfig.actions === 'contact-attempt' && (
-                <ContactAttemptAction
+                <Etapa2Actions
                   leadId={leadId}
-                  selectedPhone={selectedPhone}
-                  selectedEmail={selectedEmail}
-                  outcome={contactOutcome}
                   notes={notes}
+                  minAttempts={currentStage.intentos_requeridos || 0}
+                  maxAttempts={currentStage.limite_pospuestas || 0}
+                  currentAttempts={currentAttempts}
+                  stageTitle={currentStage.titulo}
+                  stageNumber={String(currentStage.orden)}
+                  stageClave={currentStage.clave}
+                  nextStageClave={stageConfig.nextStageClave}
+                  nextStageTitle={stageConfig.nextStageTitle}
                   onSuccess={handleSuccess}
-                  isSubmitting={isSubmitting}
                 />
               )}
 
