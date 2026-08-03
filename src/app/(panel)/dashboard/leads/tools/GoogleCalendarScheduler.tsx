@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { AlertCircle, Loader2, Calendar, Clock } from 'lucide-react';
 import { supabase } from '@/src/lib/supabase/client';
 
-interface CalendlySchedulerProps {
+interface GoogleCalendarSchedulerProps {
   leadId: string;
   stageId: string;
   stageTitulo: string;
@@ -17,14 +17,14 @@ interface CalendlySchedulerProps {
   onError: (error: string) => void;
 }
 
-export default function CalendlyScheduler({
+export default function GoogleCalendarScheduler({
   leadId,
   stageId,
   stageTitulo,
   lead,
   onEventScheduled,
   onError,
-}: CalendlySchedulerProps) {
+}: GoogleCalendarSchedulerProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -56,7 +56,7 @@ export default function CalendlyScheduler({
           return;
         }
 
-        const response = await fetch('/api/calendly/availability?days=14', {
+        const response = await fetch('/api/google-calendar/availability?days=30', {
           headers: {
             'Authorization': `Bearer ${token}`,
           },
@@ -106,7 +106,7 @@ export default function CalendlyScheduler({
     setSubmitting(true);
 
     try {
-      console.log('📅 Agendando reunión...');
+      console.log('📅 Agendando reunión en Google Calendar...');
 
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
@@ -119,8 +119,7 @@ export default function CalendlyScheduler({
 
       const startTime = `${selectedDate}T${selectedTime}:00`;
 
-      // API route maneja: Calendly, BD (lead_meetings), comentarios
-      const createEventResponse = await fetch('/api/calendly/create-event', {
+      const createEventResponse = await fetch('/api/google-calendar/create-event', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -154,13 +153,13 @@ export default function CalendlyScheduler({
         start_time: startTime,
         invitee_name: inviteeName,
         invitee_email: inviteeEmail,
-        invitee_link: eventResult.inviteeLink,
+        google_event_link: eventResult.googleEventLink,
       });
 
-      // Abrir Calendly en nueva ventana después de un breve delay
-      if (eventResult.inviteeLink) {
+      // Abrir Google Calendar si hay link
+      if (eventResult.googleEventLink) {
         setTimeout(() => {
-          window.open(eventResult.inviteeLink, '_blank', 'width=800,height=600');
+          window.open(eventResult.googleEventLink, '_blank', 'width=800,height=600');
         }, 500);
       }
 

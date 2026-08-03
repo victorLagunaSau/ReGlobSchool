@@ -5,6 +5,7 @@ import { ArrowLeft, Settings, Calendar } from 'lucide-react';
 import Link from 'next/link';
 import { supabase } from '@/src/lib/supabase/client';
 import CalendlyConfigForm from './CalendlyConfigForm';
+import GoogleCalendarConfigForm from './GoogleCalendarConfigForm';
 
 interface Integration {
   id: string;
@@ -85,6 +86,33 @@ export default function SettingsPage() {
             </div>
           ) : (
             <div className="space-y-4">
+              {/* Google Calendar Config */}
+              <div className="p-4 border border-slate-200 rounded-lg">
+                <div className="flex items-start justify-between mb-4">
+                  <div>
+                    <h3 className="font-bold text-slate-900">Google Calendar</h3>
+                    <p className="text-sm text-slate-600 mt-1">
+                      {integrations.find((i) => i.provider === 'google_calendar')?.account_email ||
+                        'No configurado'}
+                    </p>
+                  </div>
+                  {integrations.find((i) => i.provider === 'google_calendar')?.is_active && (
+                    <span className="px-3 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full">
+                      Conectado
+                    </span>
+                  )}
+                </div>
+
+                {/* Formulario */}
+                <GoogleCalendarConfigForm
+                  userId={userId!}
+                  existingConfig={integrations.find((i) => i.provider === 'google_calendar') || null}
+                  onSaved={() => {
+                    loadData();
+                  }}
+                />
+              </div>
+
               {/* Calendly Config */}
               <div className="p-4 border border-slate-200 rounded-lg">
                 <div className="flex items-start justify-between mb-4">
@@ -107,7 +135,6 @@ export default function SettingsPage() {
                   userId={userId!}
                   existingConfig={integrations.find((i) => i.provider === 'calendly') || null}
                   onSaved={() => {
-                    // Recargar integraciones
                     loadData();
                   }}
                 />

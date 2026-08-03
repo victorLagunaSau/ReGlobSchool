@@ -88,12 +88,17 @@ export async function GET(req: NextRequest) {
     }
 
     const meData = await meResponse.json();
-    const calendlyUserId = meData.resource.uri; // ej: https://api.calendly.com/users/123abc
+    const calendlyUserUri = meData.resource.uri; // ej: https://api.calendly.com/users/123abc
+    const calendlyUserId = calendlyUserUri.split('/').pop(); // extraer ID: 123abc
 
     console.log('✅ Got Calendly user:', calendlyUserId);
+    console.log('📋 Full URI:', calendlyUserUri);
 
     // 2. Obtener event_types del usuario
-    const eventTypesResponse = await fetch(`https://api.calendly.com/users/${calendlyUserId}/event_types`, {
+    const eventTypesUrl = `https://api.calendly.com/users/${calendlyUserId}/event_types`;
+    console.log('🔗 Event types URL:', eventTypesUrl);
+
+    const eventTypesResponse = await fetch(eventTypesUrl, {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
