@@ -297,6 +297,9 @@ export default function ModalPipelineStage({
                 <option value="inicial">Inicial</option>
                 <option value="contacto">Contacto</option>
                 <option value="reunion">Reunión</option>
+                <option value="documentacion">Documentación</option>
+                <option value="exito">Éxito</option>
+                <option value="negociacion">Negociación</option>
                 <option value="reagendar">Reagendar</option>
                 <option value="cierre">Cierre</option>
               </select>
