@@ -177,11 +177,12 @@ export default function StageModal({
 
   const loadMeetingDetails = async () => {
     try {
-      // Traer reunión más reciente con status 'agendada' (puede haber múltiples)
+      // Traer reunión de LA ETAPA ACTUAL (lead_id + stage_id + status)
       const { data, error: err } = await supabase
         .from('lead_meetings')
         .select('*')
         .eq('lead_id', leadId)
+        .eq('stage_id', currentStage?.id)
         .eq('status', 'agendada')
         .order('created_at', { ascending: false })
         .limit(1);
@@ -504,6 +505,7 @@ export default function StageModal({
                   calendlyComponent={
                     <CalendlyScheduler
                       leadId={leadId}
+                      stageId={currentStage?.id || ''}
                       lead={lead}
                       onEventScheduled={(data) => {
                         setEventScheduled(true);

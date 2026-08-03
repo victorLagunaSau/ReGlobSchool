@@ -6,6 +6,7 @@ import { supabase } from '@/src/lib/supabase/client';
 
 interface CalendlySchedulerProps {
   leadId: string;
+  stageId: string;
   lead: {
     business_name: string;
     email?: string;
@@ -17,6 +18,7 @@ interface CalendlySchedulerProps {
 
 export default function CalendlyScheduler({
   leadId,
+  stageId,
   lead,
   onEventScheduled,
   onError,
@@ -117,6 +119,7 @@ export default function CalendlyScheduler({
         },
         body: JSON.stringify({
           leadId,
+          stageId,
           startTime,
           inviteeName,
           inviteeEmail,

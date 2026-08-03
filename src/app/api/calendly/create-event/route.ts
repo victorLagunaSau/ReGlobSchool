@@ -11,15 +11,16 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     console.log('📅 Request body:', JSON.stringify(body));
 
-    const { leadId, startTime, inviteeName, inviteeEmail, inviteePhone } = body;
+    const { leadId, stageId, startTime, inviteeName, inviteeEmail, inviteePhone } = body;
 
-    if (!leadId || !startTime || !inviteeName || !inviteeEmail) {
-      console.error('❌ Missing fields:', { leadId, startTime, inviteeName, inviteeEmail });
+    if (!leadId || !stageId || !startTime || !inviteeName || !inviteeEmail) {
+      console.error('❌ Missing fields:', { leadId, stageId, startTime, inviteeName, inviteeEmail });
       return NextResponse.json(
         {
           error: 'Missing required fields',
           missing: {
             leadId: !leadId,
+            stageId: !stageId,
             startTime: !startTime,
             inviteeName: !inviteeName,
             inviteeEmail: !inviteeEmail,
@@ -114,6 +115,7 @@ export async function POST(req: NextRequest) {
     let eventUri = `https://calendly.com/meeting/${leadId}/${Date.now()}`;
 
     // STEP 1: Save to BD first
+    // Intenta actualizar reunión existente para este lead+stage
     const { data: updateData, error: updateErr } = await supabase
       .from('lead_meetings')
       .update({
@@ -127,6 +129,7 @@ export async function POST(req: NextRequest) {
         status: 'agendada',
       })
       .eq('lead_id', leadId)
+      .eq('stage_id', stageId)
       .select('id')
       .single();
 
@@ -138,6 +141,7 @@ export async function POST(req: NextRequest) {
         .from('lead_meetings')
         .insert({
           lead_id: leadId,
+          stage_id: stageId,
           user_id: userId,
           event_type: 'Meeting',
           start_time: startTime,
