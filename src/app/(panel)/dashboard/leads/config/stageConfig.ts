@@ -1,22 +1,41 @@
 /**
  * Configuración de etapas por clave
- * Define qué herramientas y accionables se cargan en cada etapa
+ * Las herramientas se definen por TIPO, no por clave
+ * Múltiples claves pueden tener el mismo tipo y compartir herramientas
+ *
+ * Ejemplo:
+ * - Clave 102 "Contacto Inicial" → Tipo: contacto → herramientas de contacto
+ * - Clave 105 "Reagendar Llamada" → Tipo: contacto → MISMAS herramientas de contacto
  */
 
-export type StageClave = '101' | '102' | '103' | '104' | string;
+export type StageClave = '101' | '102' | '103' | '104' | '201' | '301' | '401' | string;
+export type StageType = 'inicial' | 'contacto' | 'reunion' | 'documentacion' | 'exito' | 'negociacion' | 'cierre' | string;
 
-interface StageToolConfig {
-  tools: string[]; // ['calendar', 'phones', 'emails', 'progress', 'decision-makers']
-  actions: string; // 'calendarize' | 'contact-outcome' | 'reunion'
+interface StageConfig {
+  tipo: StageType; // Define qué herramientas usar
+  actions: string; // Define qué acciones mostrar
   minAttempts?: number;
   nextStageClave?: string;
   nextStageTitle?: string;
 }
 
-export const stageConfig: Record<StageClave, StageToolConfig> = {
+// Herramientas definidas por TIPO (no por clave)
+// Múltiples etapas pueden compartir el mismo tipo
+export const toolsByType: Record<StageType, string[]> = {
+  'inicial': ['calendar'],
+  'contacto': ['contact-channel'],
+  'reunion': [],
+  'documentacion': [],
+  'exito': [],
+  'negociacion': [],
+  'cierre': [],
+};
+
+// Configuración de etapas: clave → propiedades (incluyendo tipo)
+export const stageConfig: Record<StageClave, StageConfig> = {
   // Etapa 1 - Inicial (Iniciar Campaña)
   '101': {
-    tools: ['calendar'],
+    tipo: 'inicial',
     actions: 'calendarize',
     nextStageClave: '102',
     nextStageTitle: 'Contacto Inicial',
@@ -24,7 +43,7 @@ export const stageConfig: Record<StageClave, StageToolConfig> = {
 
   // Etapa 2 - Contacto (Contacto Inicial)
   '102': {
-    tools: ['contact-channel'],
+    tipo: 'contacto',
     actions: 'contact-attempt',
     minAttempts: 6,
     nextStageClave: '103',
@@ -33,7 +52,7 @@ export const stageConfig: Record<StageClave, StageToolConfig> = {
 
   // Etapa 3 - Reunión (Reunión de Demostración)
   '103': {
-    tools: [],
+    tipo: 'reunion',
     actions: 'reunion',
     nextStageClave: '104',
     nextStageTitle: 'Propuesta',
@@ -41,11 +60,37 @@ export const stageConfig: Record<StageClave, StageToolConfig> = {
 
   // Etapa 4 - Propuesta
   '104': {
-    tools: [],
+    tipo: 'reunion',
     actions: 'proposal',
+  },
+
+  // Etapa 5 - Documentación
+  '201': {
+    tipo: 'documentacion',
+    actions: 'documentacion',
+    nextStageClave: '202',
+    nextStageTitle: 'Éxito',
+  },
+
+  // Etapa 6 - Éxito
+  '301': {
+    tipo: 'exito',
+    actions: 'exito',
+    nextStageClave: '302',
+    nextStageTitle: 'Negociación',
+  },
+
+  // Etapa 7 - Negociación
+  '401': {
+    tipo: 'negociacion',
+    actions: 'negociacion',
   },
 };
 
-export const getStageConfig = (clave: string): StageToolConfig | null => {
+export const getStageConfig = (clave: string): StageConfig | null => {
   return stageConfig[clave] || null;
+};
+
+export const getToolsByType = (tipo: StageType): string[] => {
+  return toolsByType[tipo] || [];
 };

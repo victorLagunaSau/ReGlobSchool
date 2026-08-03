@@ -3,17 +3,23 @@
 import React, { useState, useEffect } from 'react';
 import { X, Loader2, Info, Building2, FileText, Phone, Mail, MapPin, Plus } from 'lucide-react';
 import { supabase } from '../../../../../lib/supabase/client';
-import { getStageConfig } from '../config/stageConfig';
+import { getStageConfig, getToolsByType } from '../config/stageConfig';
 import DecisionMakersForm from './DecisionMakersForm';
 
 // Herramientas
 import CalendarTool from '../tools/CalendarTool';
 import ContactChannelSelector from '../tools/ContactChannelSelector';
+import CalendlyScheduler from '../tools/CalendlyScheduler';
+import ReunionSteps from './ReunionSteps';
 
 // Accionables
 import CalendarizeAction from '../actions/CalendarizeAction';
 import ContactAttemptAction from '../actions/ContactAttemptAction';
 import Etapa2Actions from '../actions/Etapa2Actions';
+import Reunion from './Reunion';
+import Documentacion from './Documentacion';
+import Exito from './Exito';
+import Negociacion from './Negociacion';
 
 
 interface AttemptNote {
@@ -73,6 +79,18 @@ export default function StageModal({
   const [selectedEmail, setSelectedEmail] = useState<string | null>(lead?.email || null);
   const [selectedEmailName, setSelectedEmailName] = useState<string>('Email Principal');
   const [contactOutcome, setContactOutcome] = useState<'no_contactado' | 'contacto_establecido' | 'reunion_agendada'>('no_contactado');
+  const [eventScheduled, setEventScheduled] = useState(false);
+  const [meetingDetails, setMeetingDetails] = useState<any>({
+    title: '',
+    startTime: '',
+    endTime: '',
+    inviteeName: '',
+    inviteeEmail: '',
+  });
+  const [leadLocation, setLeadLocation] = useState<{ city?: string; state?: string }>({
+    city: lead?.zone_city,
+    state: lead?.state_name,
+  });
 
   // Estado de comentarios anteriores
   const [attemptNotes, setAttemptNotes] = useState<AttemptNote[]>([]);
@@ -97,11 +115,13 @@ export default function StageModal({
   const [isRegisteringCall, setIsRegisteringCall] = useState(false);
   const [isRegisteringEmail, setIsRegisteringEmail] = useState(false);
 
-  // Cargar notas anteriores y contactos
+  // Cargar notas anteriores, contactos, datos de reunión y ubicación
   useEffect(() => {
     if (isOpen && leadId) {
       loadAttemptNotes();
       loadContacts();
+      loadMeetingDetails();
+      loadLeadLocationData();
     }
   }, [isOpen, leadId]);
 
@@ -155,9 +175,92 @@ export default function StageModal({
     }
   };
 
+  const loadMeetingDetails = async () => {
+    try {
+      const { data, error: err } = await supabase
+        .from('lead_meetings')
+        .select('*')
+        .eq('lead_id', leadId)
+        .eq('status', 'agendada')
+        .single();
+
+      if (err && err.code !== 'PGRST116') {
+        // PGRST116 = no rows found (es normal si no hay reunión agendada)
+        throw err;
+      }
+
+      if (data) {
+        setEventScheduled(true);
+        setMeetingDetails({
+          title: data.event_type,
+          startTime: data.start_time,
+          endTime: data.end_time,
+          inviteeName: data.invitee_name,
+          inviteeEmail: data.invitee_email,
+          calendlyUri: data.calendly_uri,
+        });
+      } else {
+        // Si no hay reunión agendada, resetear estados
+        setEventScheduled(false);
+        setMeetingDetails({
+          title: '',
+          startTime: '',
+          endTime: '',
+          inviteeName: '',
+          inviteeEmail: '',
+          calendlyUri: '',
+        });
+      }
+    } catch (err) {
+      console.error('Error loading meeting details:', err);
+    }
+  };
+
+  const loadLeadLocationData = async () => {
+    try {
+      // Obtener datos de zona para obtener city y state
+      const { data: leadData, error: leadErr } = await supabase
+        .from('leads')
+        .select('zone_id')
+        .eq('id', leadId)
+        .single();
+
+      if (leadErr) throw leadErr;
+
+      if (leadData.zone_id) {
+        // Cargar zona para obtener city y state_id
+        const { data: zoneData, error: zoneErr } = await supabase
+          .from('zones')
+          .select('city, state_id')
+          .eq('id', leadData.zone_id)
+          .single();
+
+        if (!zoneErr && zoneData) {
+          // Cargar state para obtener nombre
+          const { data: stateData, error: stateErr } = await supabase
+            .from('states')
+            .select('name')
+            .eq('id', zoneData.state_id)
+            .single();
+
+          if (!stateErr && stateData) {
+            // Actualizar estado local con la ubicación
+            setLeadLocation({
+              city: zoneData.city,
+              state: stateData.name,
+            });
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error loading location data:', err);
+    }
+  };
+
   if (!isOpen || !lead || !currentStage) return null;
 
   const stageConfig = getStageConfig(currentStage.clave);
+  const tools = getToolsByType(currentStage.tipo || '');
 
   // Títulos dinámicos según la etapa
   const stageTitles: Record<string, string> = {
@@ -338,9 +441,9 @@ export default function StageModal({
               <div className="text-3xl font-bold text-slate-900">{lead.business_name}</div>
               <div className="flex items-center justify-between gap-3">
                 <div className="text-sm text-slate-600 flex-1">
-                  {lead.zone_city && lead.state_name
-                    ? `${lead.zone_city}, ${lead.state_name}`
-                    : lead.zone_city || lead.state_name}
+                  {leadLocation.city && leadLocation.state
+                    ? `${leadLocation.city}, ${leadLocation.state}`
+                    : leadLocation.city || leadLocation.state}
                 </div>
                 <button
                   onClick={() => setShowLeadInfo(!showLeadInfo)}
@@ -359,7 +462,7 @@ export default function StageModal({
                 <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide">
                   {toolsTitle}
                 </h3>
-                {stageConfig.tools.includes('contact-channel') && (
+                {tools.includes('contact-channel') && (
                   <button
                     onClick={() => setShowAddContactModal(true)}
                     className="flex items-center gap-1 px-3 py-1 text-xs font-bold text-slate-700 hover:bg-slate-100 rounded transition-colors"
@@ -369,11 +472,11 @@ export default function StageModal({
                 )}
               </div>
 
-              {stageConfig.tools.includes('calendar') && (
+              {tools.includes('calendar') && (
                 <CalendarTool value={selectedDate} onChange={setSelectedDate} />
               )}
 
-              {stageConfig.tools.includes('contact-channel') && (
+              {tools.includes('contact-channel') && (
                 <ContactChannelSelector
                   leadId={leadId}
                   selectedPhone={selectedPhone}
@@ -395,9 +498,27 @@ export default function StageModal({
                 />
               )}
 
-
-              {stageConfig.tools.length === 0 && (
-                <p className="text-xs text-slate-400 italic">Sin herramientas para esta etapa</p>
+              {currentStage.clave === '103' && (
+                <ReunionSteps
+                  eventScheduled={eventScheduled}
+                  meetingDetails={meetingDetails}
+                  calendlyComponent={
+                    <CalendlyScheduler
+                      leadId={leadId}
+                      lead={lead}
+                      onEventScheduled={(data) => {
+                        setEventScheduled(true);
+                        setMeetingDetails({
+                          title: data.event_type,
+                          startTime: data.start_time,
+                          inviteeName: data.invitee_name,
+                          inviteeEmail: data.invitee_email,
+                        });
+                      }}
+                      onError={(err) => setError(err)}
+                    />
+                  }
+                />
               )}
             </div>
 
@@ -503,6 +624,51 @@ export default function StageModal({
                   nextStageClave={stageConfig.nextStageClave}
                   nextStageTitle={stageConfig.nextStageTitle}
                   onSuccess={handleSuccess}
+                />
+              )}
+
+              {stageConfig.actions === 'reunion' && (
+                <Reunion
+                  leadId={leadId}
+                  lead={lead}
+                  notes={notes}
+                  stage={currentStage}
+                  eventScheduled={eventScheduled}
+                  onSuccess={handleSuccess}
+                  onCancel={onClose}
+                />
+              )}
+
+              {stageConfig.actions === 'documentacion' && (
+                <Documentacion
+                  leadId={leadId}
+                  lead={lead}
+                  stage={currentStage}
+                  notes={notes}
+                  onSuccess={handleSuccess}
+                  onCancel={onClose}
+                />
+              )}
+
+              {stageConfig.actions === 'exito' && (
+                <Exito
+                  leadId={leadId}
+                  lead={lead}
+                  stage={currentStage}
+                  notes={notes}
+                  onSuccess={handleSuccess}
+                  onCancel={onClose}
+                />
+              )}
+
+              {stageConfig.actions === 'negociacion' && (
+                <Negociacion
+                  leadId={leadId}
+                  lead={lead}
+                  stage={currentStage}
+                  notes={notes}
+                  onSuccess={handleSuccess}
+                  onCancel={onClose}
                 />
               )}
 

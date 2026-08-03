@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Loader2, AlertCircle, Clock } from 'lucide-react';
 import { supabase } from '../../../../../lib/supabase/client';
+import { deleteLeadArchive } from '../utils/deleteLead';
 
 interface DeleteActionProps {
   leadId: string;
@@ -70,123 +71,28 @@ export default function DeleteAction({
       const timeStr = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       const dateStr = now.toLocaleDateString('es-ES');
 
-      // 1. Obtener usuario actual
+      // 1. Get current user
       const { data: authData } = await supabase.auth.getUser();
       const userId = authData.user?.id;
       if (!userId) throw new Error('No authenticated user');
 
-      // 2. Auto-completar nota de eliminación
+      // 2. Auto-complete deletion notes
       const autoCompletedNotes = `${notes}\n\n${stageTitle} (Etapa ${stageNumber})\nEliminar Lead\nFecha: ${dateStr}\nHora: ${timeStr}\nIntentos: ${currentAttempts} de ${minAttempts}`;
 
-      // 3. Copiar lead a tabla de eliminados
-      const { data: leadData, error: leadFetchError } = await supabase
-        .from('leads')
-        .select('*')
-        .eq('id', leadId)
-        .single();
+      // 3. Use reusable delete archive function
+      const result = await deleteLeadArchive({
+        leadId,
+        userId,
+        stageClave,
+        stageTitle,
+        stageNumber,
+        reason: 'Límite de intentos alcanzado',
+        autoCompletedNotes,
+      });
 
-      if (leadFetchError) throw leadFetchError;
-
-      if (leadData) {
-        const { error: deleteLeadError } = await supabase
-          .from('deleted_leads')
-          .insert({
-            original_lead_id: leadData.id,
-            business_name: leadData.business_name,
-            business_type: leadData.business_type,
-            phone: leadData.phone,
-            email: leadData.email,
-            address: leadData.address,
-            website: leadData.website,
-            country_id: leadData.country_id,
-            status: leadData.status,
-            source: leadData.source,
-            deletion_reason: 'Límite de intentos alcanzado',
-            deletion_note: autoCompletedNotes,
-            deleted_by: userId,
-            original_created_at: leadData.created_at,
-            metadata: JSON.stringify(leadData),
-          });
-
-        if (deleteLeadError) throw deleteLeadError;
+      if (!result.success) {
+        throw new Error(result.error || 'Error archiving and deleting lead');
       }
-
-      // 4. Copiar contactos a tabla de eliminados
-      const { data: contactsData, error: contactsFetchError } = await supabase
-        .from('lead_contacts')
-        .select('*')
-        .eq('lead_id', leadId);
-
-      if (contactsFetchError) throw contactsFetchError;
-
-      if (contactsData && contactsData.length > 0) {
-        const contactsToArchive = contactsData.map((contact: any) => ({
-          original_contact_id: contact.id,
-          lead_id: contact.lead_id,
-          nombre: contact.nombre,
-          cargo: contact.cargo,
-          telefono: contact.telefono,
-          email: contact.email,
-          es_tomador_decision: contact.es_tomador_decision,
-          created_by: contact.created_by,
-        }));
-
-        const { error: deleteContactsError } = await supabase
-          .from('deleted_lead_contacts')
-          .insert(contactsToArchive);
-
-        if (deleteContactsError) throw deleteContactsError;
-      }
-
-      // 5. Copiar notas a tabla de eliminados
-      const { data: notesData, error: notesFetchError } = await supabase
-        .from('lead_attempt_notes')
-        .select('*')
-        .eq('lead_id', leadId);
-
-      if (notesFetchError) throw notesFetchError;
-
-      if (notesData && notesData.length > 0) {
-        const notesToArchive = notesData.map((note: any) => ({
-          original_note_id: note.id,
-          lead_id: note.lead_id,
-          stage_clave: note.stage_clave,
-          stage_titulo: note.stage_titulo,
-          attempt_number: note.attempt_number,
-          note_type: note.note_type,
-          note_text: note.note_text,
-        }));
-
-        const { error: deleteNotesError } = await supabase
-          .from('deleted_lead_attempt_notes')
-          .insert(notesToArchive);
-
-        if (deleteNotesError) throw deleteNotesError;
-      }
-
-      // 6. Eliminar del original: contactos primero (foreign key)
-      const { error: deleteContactsDbError } = await supabase
-        .from('lead_contacts')
-        .delete()
-        .eq('lead_id', leadId);
-
-      if (deleteContactsDbError) throw deleteContactsDbError;
-
-      // 7. Eliminar notas
-      const { error: deleteNotesDbError } = await supabase
-        .from('lead_attempt_notes')
-        .delete()
-        .eq('lead_id', leadId);
-
-      if (deleteNotesDbError) throw deleteNotesDbError;
-
-      // 8. Eliminar lead
-      const { error: deleteLeadDbError } = await supabase
-        .from('leads')
-        .delete()
-        .eq('id', leadId);
-
-      if (deleteLeadDbError) throw deleteLeadDbError;
 
       onSuccess();
     } catch (err: any) {
