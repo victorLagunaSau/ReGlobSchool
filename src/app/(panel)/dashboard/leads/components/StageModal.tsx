@@ -10,6 +10,7 @@ import DecisionMakersForm from './DecisionMakersForm';
 import CalendarTool from '../tools/CalendarTool';
 import ContactChannelSelector from '../tools/ContactChannelSelector';
 import CalendlyScheduler from '../tools/CalendlyScheduler';
+import GoogleCalendarScheduler from '../tools/GoogleCalendarScheduler';
 import ReunionSteps from './ReunionSteps';
 
 // Accionables
@@ -503,7 +504,7 @@ export default function StageModal({
                   eventScheduled={eventScheduled}
                   meetingDetails={meetingDetails}
                   calendlyComponent={
-                    <CalendlyScheduler
+                    <GoogleCalendarScheduler
                       leadId={leadId}
                       stageId={currentStage?.id || ''}
                       stageTitulo={currentStage?.titulo || ''}
