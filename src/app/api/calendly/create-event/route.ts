@@ -195,7 +195,7 @@ export async function POST(req: NextRequest) {
         start_time: startTime,
         end_time: endTime,
         status: 'agendada',
-        calendly_uri: calendlyUri,
+        calendly_uri: null,
       })
       .select('id')
       .single();

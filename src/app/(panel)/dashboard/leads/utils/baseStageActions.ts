@@ -55,8 +55,8 @@ export async function handleAdvanceStage({
     if (updateError) throw updateError;
 
     // 3. Record interaction for analytics
-    const { data: authData } = await supabase.auth.getUser();
-    const userId = authData.data.user?.id;
+    const { data } = await supabase.auth.getUser();
+    const userId = data?.user?.id;
 
     if (userId) {
       await supabase.from('lead_interactions').insert({
@@ -115,8 +115,8 @@ export async function handleBackStage({
     if (updateError) throw updateError;
 
     // 3. Record interaction for analytics
-    const { data: authData } = await supabase.auth.getUser();
-    const userId = authData.data.user?.id;
+    const { data } = await supabase.auth.getUser();
+    const userId = data?.user?.id;
 
     if (userId) {
       await supabase.from('lead_interactions').insert({
