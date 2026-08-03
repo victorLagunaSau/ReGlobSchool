@@ -1,12 +1,26 @@
 /**
  * Guardar token OAuth de Calendly en user_integrations
  * POST /api/auth/calendly/save-token
- * Usa createServerClient para leer el user del contexto de Supabase
+ * Encripta el token antes de guardarlo
  */
 
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
+import crypto from 'crypto';
+
+function encryptToken(token: string, encryptionKey: string): string {
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv(
+    'aes-256-gcm',
+    Buffer.from(encryptionKey, 'hex'),
+    iv
+  );
+  let encrypted = cipher.update(token, 'utf-8', 'hex');
+  encrypted += cipher.final('hex');
+  const authTag = cipher.getAuthTag();
+  return `${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted}`;
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -56,6 +70,19 @@ export async function POST(req: NextRequest) {
     const userId = userData.user.id;
     console.log('save-token: Saving for user:', userId);
 
+    // Encriptar token
+    const encryptionKey = process.env.ENCRYPTION_KEY;
+    if (!encryptionKey) {
+      console.error('save-token: ENCRYPTION_KEY not configured');
+      return NextResponse.json(
+        { error: 'Server configuration error' },
+        { status: 500 }
+      );
+    }
+
+    const encryptedToken = encryptToken(accessToken, encryptionKey);
+    console.log('save-token: Token encrypted successfully');
+
     // Guardar o actualizar integración
     const { error: upsertError } = await supabase
       .from('user_integrations')
@@ -65,7 +92,7 @@ export async function POST(req: NextRequest) {
           provider: 'calendly',
           account_email: userEmail || 'unknown@calendly.com',
           config: { oauth: true },
-          tokens: { access_token: accessToken },
+          tokens: { access_token: encryptedToken },
           is_active: true,
           updated_at: new Date().toISOString(),
         },
