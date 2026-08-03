@@ -129,26 +129,24 @@ export async function POST(req: NextRequest) {
     console.log('📅 Start time:', startTime, '| End time:', endTime);
 
     // GUARDAR EN BD: lead_meetings
+    // INSERT directo para permitir MÚLTIPLES reuniones por lead+stage
     console.log('📝 Guardando en lead_meetings...');
     const { data: meetingData, error: meetingErr } = await supabase
       .from('lead_meetings')
-      .upsert(
-        {
-          lead_id: leadId,
-          stage_id: stageId,
-          stage_numero: stageNumero,
-          stage_clave: stageClave,
-          user_id: userId,
-          event_type: 'Meeting',
-          invitee_name: inviteeName,
-          invitee_email: inviteeEmail,
-          invitee_phone: inviteePhone,
-          start_time: startTime,
-          end_time: endTime,
-          status: 'agendada',
-        },
-        { onConflict: 'lead_id,stage_id' }
-      )
+      .insert({
+        lead_id: leadId,
+        stage_id: stageId,
+        stage_numero: stageNumero,
+        stage_clave: stageClave,
+        user_id: userId,
+        event_type: 'Meeting',
+        invitee_name: inviteeName,
+        invitee_email: inviteeEmail,
+        invitee_phone: inviteePhone,
+        start_time: startTime,
+        end_time: endTime,
+        status: 'agendada',
+      })
       .select('id')
       .single();
 
@@ -171,6 +169,9 @@ export async function POST(req: NextRequest) {
       .insert({
         lead_id: leadId,
         stage_id: stageId,
+        stage_clave: stageClave,
+        stage_titulo: stageTitulo,
+        attempt_number: 1,
         note_type: 'reunion_agendada',
         note_text: noteText,
       });
