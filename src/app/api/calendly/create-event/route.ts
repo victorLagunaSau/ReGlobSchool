@@ -172,7 +172,7 @@ export async function POST(req: NextRequest) {
         stage_clave: stageClave,
         stage_titulo: stageTitulo,
         attempt_number: 1,
-        note_type: 'reunion_agendada',
+        note_type: 'success',
         note_text: noteText,
       });
 
