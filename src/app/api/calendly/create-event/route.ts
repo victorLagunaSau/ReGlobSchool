@@ -1,11 +1,94 @@
 /**
  * POST /api/calendly/create-event
- * Solo guarda datos de reunión en BD (lead_meetings + comentarios)
- * No crea eventos en Calendly ni Zoom (hacer después)
+ * 1. Crea evento en Calendly usando API
+ * 2. Guarda datos en lead_meetings con calendly_uri
+ * 3. Guarda comentario en lead_attempt_notes
  */
 
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
+
+// Helper: decrypt token (matches middleware.ts encryption)
+function decryptToken(encryptedToken: string, encryptionKey: string): string {
+  const [iv, authTag, encryptedData] = encryptedToken.split(':');
+  const decipher = crypto.createDecipheriv(
+    'aes-256-gcm',
+    Buffer.from(encryptionKey, 'hex'),
+    Buffer.from(iv, 'hex')
+  );
+  decipher.setAuthTag(Buffer.from(authTag, 'hex'));
+  let decrypted = decipher.update(Buffer.from(encryptedData, 'hex'));
+  decrypted = Buffer.concat([decrypted, decipher.final()]);
+  return decrypted.toString('utf-8');
+}
+
+// Helper: create event in Calendly
+async function createCalendlyEvent(
+  calendlyUrl: string,
+  accessToken: string,
+  eventName: string,
+  eventEmail: string,
+  eventPhone: string,
+  startTime: string,
+  endTime: string
+) {
+  console.log('📅 Creating Calendly event...');
+
+  try {
+    // Get current user ID from Calendly API
+    const meResponse = await fetch('https://api.calendly.com/users/me', {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!meResponse.ok) {
+      throw new Error(`Calendly API error: ${meResponse.status}`);
+    }
+
+    const meData = await meResponse.json();
+    const userId = meData.resource.uri;
+    console.log('✅ Got Calendly user ID');
+
+    // Create the scheduled event
+    const createResponse = await fetch('https://api.calendly.com/scheduled_events', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        event: calendlyUrl,
+        invitees: [
+          {
+            name: eventName,
+            email: eventEmail,
+            phone_number: eventPhone,
+          }
+        ],
+        start_time: startTime,
+        end_time: endTime,
+      }),
+    });
+
+    if (!createResponse.ok) {
+      const errorData = await createResponse.json();
+      console.error('❌ Calendly creation error:', errorData);
+      throw new Error(`Failed to create Calendly event: ${errorData.message || 'Unknown error'}`);
+    }
+
+    const eventData = await createResponse.json();
+    const eventUri = eventData.resource.uri;
+    console.log('✅ Calendly event created:', eventUri);
+
+    return eventUri;
+  } catch (err) {
+    console.error('❌ Calendly error:', err);
+    throw err;
+  }
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -128,6 +211,61 @@ export async function POST(req: NextRequest) {
     const endTime = startDate.toISOString();
     console.log('📅 Start time:', startTime, '| End time:', endTime);
 
+    // Get Calendly token from user_integrations
+    let calendlyUri: string | null = null;
+    let calendlyError: string | null = null;
+
+    try {
+      const { data: integration, error: integError } = await supabase
+        .from('user_integrations')
+        .select('tokens, config')
+        .eq('user_id', userId)
+        .eq('provider', 'calendly')
+        .eq('is_active', true)
+        .single();
+
+      if (integError || !integration) {
+        console.warn('⚠️ Calendly integration not found or inactive');
+        calendlyError = 'Calendly not configured';
+      } else {
+        const encryptedToken = integration.tokens?.access_token;
+        const calendlyUrl = integration.config?.calendly_url;
+
+        if (!encryptedToken || !calendlyUrl) {
+          console.warn('⚠️ Missing Calendly token or URL');
+          calendlyError = 'Calendly token or URL missing';
+        } else {
+          try {
+            // Decrypt token
+            const encryptionKey = process.env.ENCRYPTION_KEY;
+            if (!encryptionKey) {
+              throw new Error('ENCRYPTION_KEY not configured');
+            }
+            const accessToken = decryptToken(encryptedToken, encryptionKey);
+
+            // Create event in Calendly
+            calendlyUri = await createCalendlyEvent(
+              calendlyUrl,
+              accessToken,
+              inviteeName,
+              inviteeEmail,
+              inviteePhone,
+              startTime,
+              endTime
+            );
+
+            console.log('✅ Calendly event created:', calendlyUri);
+          } catch (err) {
+            console.warn('⚠️ Calendly creation failed:', err instanceof Error ? err.message : 'Unknown');
+            calendlyError = err instanceof Error ? err.message : 'Failed to create Calendly event';
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('⚠️ Error getting Calendly config:', err);
+      calendlyError = 'Could not access Calendly config';
+    }
+
     // GUARDAR EN BD: lead_meetings
     // INSERT directo para permitir MÚLTIPLES reuniones por lead+stage
     console.log('📝 Guardando en lead_meetings...');
@@ -146,6 +284,7 @@ export async function POST(req: NextRequest) {
         start_time: startTime,
         end_time: endTime,
         status: 'agendada',
+        calendly_uri: calendlyUri,
       })
       .select('id')
       .single();
@@ -185,7 +324,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       meetingId,
-      message: 'Reunión guardada en BD',
+      message: 'Reunión guardada en BD' + (calendlyUri ? ' y en Calendly' : ''),
+      calendlyUri,
+      calendlyError,
     });
   } catch (error) {
     console.error('🔥 Catch error:', error);
