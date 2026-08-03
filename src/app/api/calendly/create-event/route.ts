@@ -107,6 +107,21 @@ export async function POST(req: NextRequest) {
 
     console.log('✅ Lead found:', lead.business_name);
 
+    // Get stage info (numero y clave)
+    const { data: stageData, error: stageError } = await supabase
+      .from('pipeline_stages')
+      .select('orden, clave')
+      .eq('id', stageId)
+      .single();
+
+    if (stageError || !stageData) {
+      console.error('⚠️ Stage not found:', stageId, stageError);
+    }
+
+    const stageNumero = stageData?.orden || null;
+    const stageClave = stageData?.clave || null;
+    console.log('📊 Stage info - Número:', stageNumero, '| Clave:', stageClave);
+
     // Calculate end time (30 minutes after start)
     const startDate = new Date(startTime);
     startDate.setMinutes(startDate.getMinutes() + 30);
@@ -121,7 +136,10 @@ export async function POST(req: NextRequest) {
         {
           lead_id: leadId,
           stage_id: stageId,
+          stage_numero: stageNumero,
+          stage_clave: stageClave,
           user_id: userId,
+          event_type: 'Meeting',
           invitee_name: inviteeName,
           invitee_email: inviteeEmail,
           invitee_phone: inviteePhone,
