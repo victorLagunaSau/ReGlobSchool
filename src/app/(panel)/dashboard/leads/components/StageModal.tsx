@@ -506,6 +506,7 @@ export default function StageModal({
                     <CalendlyScheduler
                       leadId={leadId}
                       stageId={currentStage?.id || ''}
+                      stageTitulo={currentStage?.titulo || ''}
                       lead={lead}
                       onEventScheduled={(data) => {
                         setEventScheduled(true);

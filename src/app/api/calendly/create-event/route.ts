@@ -1,6 +1,7 @@
 /**
  * POST /api/calendly/create-event
- * Creates event and saves to BD
+ * Solo guarda datos de reunión en BD (lead_meetings + comentarios)
+ * No crea eventos en Calendly ni Zoom (hacer después)
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -11,7 +12,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     console.log('📅 Request body:', JSON.stringify(body));
 
-    const { leadId, stageId, startTime, inviteeName, inviteeEmail, inviteePhone } = body;
+    const { leadId, stageId, startTime, inviteeName, inviteeEmail, inviteePhone, stageTitulo } = body;
 
     if (!leadId || !stageId || !startTime || !inviteeName || !inviteeEmail) {
       console.error('❌ Missing fields:', { leadId, stageId, startTime, inviteeName, inviteeEmail });
@@ -109,168 +110,66 @@ export async function POST(req: NextRequest) {
     // Calculate end time (30 minutes after start)
     const startDate = new Date(startTime);
     startDate.setMinutes(startDate.getMinutes() + 30);
-    const endTime = startDate.toISOString().replace('Z', '');
+    const endTime = startDate.toISOString();
     console.log('📅 Start time:', startTime, '| End time:', endTime);
 
-    let eventUri = `https://calendly.com/meeting/${leadId}/${Date.now()}`;
-
-    // STEP 1: Save to BD first
-    // Intenta actualizar reunión existente para este lead+stage
-    const { data: updateData, error: updateErr } = await supabase
+    // GUARDAR EN BD: lead_meetings
+    console.log('📝 Guardando en lead_meetings...');
+    const { data: meetingData, error: meetingErr } = await supabase
       .from('lead_meetings')
-      .update({
-        event_type: 'Meeting',
-        start_time: startTime,
-        end_time: endTime,
-        invitee_name: inviteeName,
-        invitee_email: inviteeEmail,
-        invitee_phone: inviteePhone,
-        calendly_uri: eventUri,
-        status: 'agendada',
-      })
-      .eq('lead_id', leadId)
-      .eq('stage_id', stageId)
-      .select('id')
-      .single();
-
-    let meetingId: string;
-
-    if (updateErr?.code === 'PGRST116') {
-      console.log('📝 No meeting found, inserting...');
-      const { data: insertData, error: insertErr } = await supabase
-        .from('lead_meetings')
-        .insert({
+      .upsert(
+        {
           lead_id: leadId,
           stage_id: stageId,
           user_id: userId,
-          event_type: 'Meeting',
-          start_time: startTime,
-          end_time: endTime,
           invitee_name: inviteeName,
           invitee_email: inviteeEmail,
           invitee_phone: inviteePhone,
-          calendly_uri: eventUri,
+          start_time: startTime,
+          end_time: endTime,
           status: 'agendada',
-        })
-        .select('id')
-        .single();
+        },
+        { onConflict: 'lead_id,stage_id' }
+      )
+      .select('id')
+      .single();
 
-      if (insertErr) {
-        console.error('❌ Insert error:', insertErr);
-        return NextResponse.json(
-          { error: `Failed to insert meeting: ${insertErr.message}` },
-          { status: 500 }
-        );
-      }
-      meetingId = insertData!.id;
-      console.log('✅ Meeting inserted:', meetingId);
-    } else if (updateErr) {
-      console.error('❌ Update error:', updateErr);
+    if (meetingErr) {
+      console.error('❌ Meeting save error:', meetingErr);
       return NextResponse.json(
-        { error: `Failed to save meeting: ${updateErr.message}` },
+        { error: `Failed to save meeting: ${meetingErr.message}` },
         { status: 500 }
       );
-    } else {
-      meetingId = updateData!.id;
-      console.log('✅ Meeting updated:', meetingId);
     }
 
-    // Save attempt note
+    const meetingId = meetingData.id;
+    console.log('✅ Meeting saved:', meetingId);
+
+    // GUARDAR COMENTARIO: formato "Reunión- Etapa X: ..."
+    const stageNumber = stageId.split('-')[0] || stageId;
+    const noteText = `Reunión- Etapa ${stageTitulo}: ${inviteeName} (${inviteeEmail}) - ${startTime}${inviteePhone ? ` - ${inviteePhone}` : ''}`;
+
     const { error: noteErr } = await supabase
       .from('lead_attempt_notes')
       .insert({
         lead_id: leadId,
-        stage_clave: '103',
-        stage_titulo: 'Reunión de Demostración',
-        attempt_number: 1,
-        note_type: 'success',
-        note_text: `Reunión agendada - ${inviteeName} (${inviteeEmail}, ${inviteePhone}) - ${startTime}`,
+        stage_id: stageId,
+        stage_clave: stageId,
+        stage_titulo: stageTitulo,
+        note_type: 'reunion_agendada',
+        note_text: noteText,
       });
 
     if (noteErr) {
-      console.warn('⚠️ Note insert warning:', noteErr);
+      console.warn('⚠️ Note save warning:', noteErr);
     } else {
-      console.log('✅ Note saved');
-    }
-
-    // STEP 2: Try to create event in real Calendly (optional, doesn't block if fails)
-    const { data: integration } = await supabase
-      .from('user_integrations')
-      .select('access_token, integration_type')
-      .eq('user_id', userId)
-      .eq('integration_type', 'calendly')
-      .single();
-
-    if (integration?.access_token) {
-      console.log('✅ Calendly integration found, attempting real event creation');
-
-      try {
-        const calendlyToken = integration.access_token;
-
-        // Get user's calendar
-        const userRes = await fetch('https://api.calendly.com/users/me', {
-          headers: { 'Authorization': `Bearer ${calendlyToken}` }
-        });
-
-        if (!userRes.ok) throw new Error('Failed to get Calendly user');
-
-        const userData = await userRes.json();
-        const calendlyUserId = userData.resource.uri.split('/').pop();
-
-        // Get first event type
-        const eventTypesRes = await fetch(`https://api.calendly.com/users/${calendlyUserId}/event_types`, {
-          headers: { 'Authorization': `Bearer ${calendlyToken}` }
-        });
-
-        if (!eventTypesRes.ok) throw new Error('Failed to get event types');
-
-        const eventTypesData = await eventTypesRes.json();
-        if (eventTypesData.collection && eventTypesData.collection.length > 0) {
-          const eventTypeUri = eventTypesData.collection[0].uri;
-
-          // Create scheduled event in Calendly
-          const eventRes = await fetch('https://api.calendly.com/scheduled_events', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${calendlyToken}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              event_type: eventTypeUri,
-              invitees: [{ name: inviteeName, email: inviteeEmail, phone_number: inviteePhone }],
-              start_time: startTime,
-              end_time: endTime,
-              notes: `Cliente: ${inviteeName}\nTeléfono: ${inviteePhone}`
-            })
-          });
-
-          if (eventRes.ok) {
-            const eventData = await eventRes.json();
-            eventUri = eventData.resource.calendar_event_uri;
-            console.log('✅ Event created in Calendly:', eventUri);
-
-            // Update meeting with real Calendly URI
-            await supabase
-              .from('lead_meetings')
-              .update({ calendly_uri: eventUri })
-              .eq('id', meetingId);
-          } else {
-            const errData = await eventRes.json();
-            console.warn('⚠️ Calendly event creation failed:', errData);
-          }
-        }
-      } catch (calendlyErr) {
-        console.warn('⚠️ Calendly API error:', calendlyErr instanceof Error ? calendlyErr.message : 'Unknown');
-      }
-    } else {
-      console.warn('⚠️ No Calendly integration found');
+      console.log('✅ Comment saved');
     }
 
     return NextResponse.json({
       success: true,
-      eventUri,
       meetingId,
-      message: 'Reunión agendada correctamente',
+      message: 'Reunión guardada en BD',
     });
   } catch (error) {
     console.error('🔥 Catch error:', error);
