@@ -101,7 +101,13 @@ export async function GET(req: NextRequest) {
     });
 
     if (!eventTypesResponse.ok) {
-      throw new Error('Failed to get event types');
+      const errorText = await eventTypesResponse.text();
+      console.error('Calendly event_types error:', {
+        status: eventTypesResponse.status,
+        statusText: eventTypesResponse.statusText,
+        body: errorText,
+      });
+      throw new Error(`Calendly API error (${eventTypesResponse.status}): ${errorText}`);
     }
 
     const eventTypesData = await eventTypesResponse.json();
