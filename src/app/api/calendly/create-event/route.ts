@@ -23,73 +23,6 @@ function decryptToken(encryptedToken: string, encryptionKey: string): string {
   return decrypted.toString('utf-8');
 }
 
-// Helper: create event in Calendly
-async function createCalendlyEvent(
-  calendlyUrl: string,
-  accessToken: string,
-  eventName: string,
-  eventEmail: string,
-  eventPhone: string,
-  startTime: string,
-  endTime: string
-) {
-  console.log('📅 Creating Calendly event...');
-
-  try {
-    // Get current user ID from Calendly API
-    const meResponse = await fetch('https://api.calendly.com/users/me', {
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-    });
-
-    if (!meResponse.ok) {
-      throw new Error(`Calendly API error: ${meResponse.status}`);
-    }
-
-    const meData = await meResponse.json();
-    const userId = meData.resource.uri;
-    console.log('✅ Got Calendly user ID');
-
-    // Create the scheduled event
-    const createResponse = await fetch('https://api.calendly.com/scheduled_events', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        event: calendlyUrl,
-        invitees: [
-          {
-            name: eventName,
-            email: eventEmail,
-            phone_number: eventPhone,
-          }
-        ],
-        start_time: startTime,
-        end_time: endTime,
-      }),
-    });
-
-    if (!createResponse.ok) {
-      const errorData = await createResponse.json();
-      console.error('❌ Calendly creation error:', errorData);
-      throw new Error(`Failed to create Calendly event: ${errorData.message || 'Unknown error'}`);
-    }
-
-    const eventData = await createResponse.json();
-    const eventUri = eventData.resource.uri;
-    console.log('✅ Calendly event created:', eventUri);
-
-    return eventUri;
-  } catch (err) {
-    console.error('❌ Calendly error:', err);
-    throw err;
-  }
-}
-
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -211,14 +144,14 @@ export async function POST(req: NextRequest) {
     const endTime = startDate.toISOString();
     console.log('📅 Start time:', startTime, '| End time:', endTime);
 
-    // Get Calendly token from user_integrations
-    let calendlyUri: string | null = null;
+    // Get Calendly URL from user_integrations (para abrir invitee link)
+    let inviteeLink: string | null = null;
     let calendlyError: string | null = null;
 
     try {
       const { data: integration, error: integError } = await supabase
         .from('user_integrations')
-        .select('tokens, config')
+        .select('config')
         .eq('user_id', userId)
         .eq('provider', 'calendly')
         .eq('is_active', true)
@@ -228,37 +161,15 @@ export async function POST(req: NextRequest) {
         console.warn('⚠️ Calendly integration not found or inactive');
         calendlyError = 'Calendly not configured';
       } else {
-        const encryptedToken = integration.tokens?.access_token;
         const calendlyUrl = integration.config?.calendly_url;
 
-        if (!encryptedToken || !calendlyUrl) {
-          console.warn('⚠️ Missing Calendly token or URL');
-          calendlyError = 'Calendly token or URL missing';
+        if (!calendlyUrl) {
+          console.warn('⚠️ Missing Calendly URL');
+          calendlyError = 'Calendly URL not configured';
         } else {
-          try {
-            // Decrypt token
-            const encryptionKey = process.env.ENCRYPTION_KEY;
-            if (!encryptionKey) {
-              throw new Error('ENCRYPTION_KEY not configured');
-            }
-            const accessToken = decryptToken(encryptedToken, encryptionKey);
-
-            // Create event in Calendly
-            calendlyUri = await createCalendlyEvent(
-              calendlyUrl,
-              accessToken,
-              inviteeName,
-              inviteeEmail,
-              inviteePhone,
-              startTime,
-              endTime
-            );
-
-            console.log('✅ Calendly event created:', calendlyUri);
-          } catch (err) {
-            console.warn('⚠️ Calendly creation failed:', err instanceof Error ? err.message : 'Unknown');
-            calendlyError = err instanceof Error ? err.message : 'Failed to create Calendly event';
-          }
+          // Usar la URL de Calendly como invitee link
+          inviteeLink = calendlyUrl;
+          console.log('✅ Invitee link ready:', inviteeLink);
         }
       }
     } catch (err) {
@@ -324,8 +235,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       meetingId,
-      message: 'Reunión guardada en BD' + (calendlyUri ? ' y en Calendly' : ''),
-      calendlyUri,
+      message: 'Reunión guardada en BD. Abre Calendly para confirmar.',
+      inviteeLink,
       calendlyError,
     });
   } catch (error) {

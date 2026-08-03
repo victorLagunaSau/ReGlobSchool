@@ -1,7 +1,7 @@
 /**
- * Calendly Webhook Handler
  * POST /api/calendly/webhook
- * Recibe eventos cuando se agenda/cancela una reunión
+ * Recibe eventos de Calendly cuando se agenda una reunión
+ * Guarda calendly_uri en lead_meetings
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -9,94 +9,105 @@ import { createClient } from '@supabase/supabase-js';
 
 export async function POST(req: NextRequest) {
   try {
-    const payload = await req.json();
-    console.log('📨 Webhook received from Calendly:', payload.event);
+    const body = await req.json();
+    console.log('📬 Webhook received:', body.event);
 
-    if (payload.event === 'invitee.created') {
-      const { scheduled_event, invitee, event_type } = payload.payload;
+    const event = body.event;
+    if (event !== 'invitee.created') {
+      console.warn('⏭️ Ignoring event:', event);
+      return NextResponse.json({ success: true, ignored: true });
+    }
 
-      console.log('📅 Meeting scheduled:', {
-        event_type: event_type.name,
-        start_time: scheduled_event.start_time,
-        invitee_email: invitee.email,
-      });
+    const payload = body.payload;
+    if (!payload) {
+      console.error('❌ No payload in webhook');
+      return NextResponse.json({ error: 'No payload' }, { status: 400 });
+    }
 
-      // Crear cliente Supabase con SERVICE ROLE (privilegios elevados)
-      const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-        process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-      );
+    const inviteeEmail = payload.invitee?.email;
+    const inviteeName = payload.invitee?.name;
+    const inviteePhone = payload.invitee?.phone_number;
+    const startTime = payload.event?.start_time;
+    const eventUri = payload.event?.uri;
 
-      // Buscar el registro por email sintético (formato: {lead_id}@calendarregglobschool.com)
-      // Esto asegura que encontremos EXACTAMENTE el registro correcto sin conflictos
-      const { data: meetings, error: meetingError } = await supabase
-        .from('lead_meetings')
-        .select('id')
-        .eq('invitee_email', invitee.email);
+    if (!inviteeEmail || !startTime || !eventUri) {
+      console.error('❌ Missing required fields in webhook');
+      return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+    }
 
-      if (meetingError) {
-        console.error('❌ Error searching meeting:', meetingError.message);
-        return NextResponse.json(
-          { error: 'Failed to search meeting', details: meetingError.message },
-          { status: 500 }
+    console.log('📅 Event details:', {
+      email: inviteeEmail,
+      name: inviteeName,
+      startTime,
+      eventUri,
+    });
+
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+    );
+
+    // Buscar lead_meetings con status='agendada' y email coincidente
+    console.log('🔍 Searching for matching meeting with email:', inviteeEmail);
+    const { data: meetings, error: searchError } = await supabase
+      .from('lead_meetings')
+      .select('id, lead_id, stage_id, invitee_email, start_time')
+      .eq('invitee_email', inviteeEmail)
+      .eq('status', 'agendada');
+
+    if (searchError) {
+      console.error('❌ Search error:', searchError);
+      throw searchError;
+    }
+
+    if (!meetings || meetings.length === 0) {
+      console.warn('⚠️ No matching meeting found for email:', inviteeEmail);
+      return NextResponse.json({ success: true, message: 'No matching meeting found' });
+    }
+
+    // Si hay múltiples coincidencias, usar la más cercana en fecha
+    let targetMeeting = meetings[0];
+    if (meetings.length > 1) {
+      const startDate = new Date(startTime);
+      targetMeeting = meetings.reduce((closest, current) => {
+        const currentDiff = Math.abs(
+          new Date(current.start_time).getTime() - startDate.getTime()
         );
-      }
-
-      const meeting = meetings && meetings.length > 0 ? meetings[0] : null;
-
-      if (meeting) {
-        // ENCONTRADO - ACTUALIZAR registro con datos reales del webhook
-        console.log('🔄 Updating meeting record:', meeting.id);
-        const { error: updateError } = await supabase
-          .from('lead_meetings')
-          .update({
-            event_type: event_type.name,
-            start_time: scheduled_event.start_time,
-            end_time: scheduled_event.end_time,
-            invitee_name: invitee.name,
-            calendly_uri: scheduled_event.uri,
-          })
-          .eq('id', meeting.id);
-
-        if (updateError) {
-          console.error('❌ Error updating meeting:', updateError);
-          return NextResponse.json(
-            { error: 'Failed to update meeting', details: updateError.message },
-            { status: 500 }
-          );
-        }
-
-        console.log('✅ Meeting updated successfully:', meeting.id);
-      } else {
-        // NO ENCONTRADO - ignorar webhook (no es un registro creado en nuestra app)
-        console.warn('⚠️ Meeting not found with invitee_email:', invitee.email);
-        return NextResponse.json({ success: true });
-      }
-
-      return NextResponse.json({ success: true });
-    }
-
-    if (payload.event === 'invitee.canceled') {
-      const { scheduled_event, invitee } = payload.payload;
-
-      console.log('❌ Meeting canceled:', {
-        start_time: scheduled_event.start_time,
-        invitee_email: invitee.email,
+        const closestDiff = Math.abs(
+          new Date(closest.start_time).getTime() - startDate.getTime()
+        );
+        return currentDiff < closestDiff ? current : closest;
       });
-
-      // Aquí podrías actualizar el estado de la reunión o eliminarla
-      // Por ahora, solo loguear
-
-      return NextResponse.json({ success: true });
     }
 
-    // Otros eventos - ignorar pero confirmar recepción
-    console.log('ℹ️ Ignoring event:', payload.event);
-    return NextResponse.json({ success: true });
+    console.log('✅ Found matching meeting:', targetMeeting.id);
+
+    // Actualizar lead_meetings con calendly_uri
+    const { error: updateError } = await supabase
+      .from('lead_meetings')
+      .update({
+        calendly_uri: eventUri,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', targetMeeting.id);
+
+    if (updateError) {
+      console.error('❌ Update error:', updateError);
+      throw updateError;
+    }
+
+    console.log('✅ Meeting updated with calendly_uri');
+
+    return NextResponse.json({
+      success: true,
+      message: 'Webhook processed successfully',
+      meetingId: targetMeeting.id,
+      calendlyUri: eventUri,
+    });
   } catch (error) {
-    console.error('🔥 Webhook error:', error instanceof Error ? error.message : String(error));
+    console.error('🔥 Webhook error:', error);
     return NextResponse.json(
-      { error: 'Failed to process webhook' },
+      { error: error instanceof Error ? error.message : 'Server error' },
       { status: 500 }
     );
   }

@@ -1,12 +1,11 @@
 /**
- * GET /api/calendly/availability
- * Retorna horarios disponibles REALES desde Calendly API
- * Query params: ?days=14 (default)
+ * POST /api/calendly/configure-webhook
+ * Crea automáticamente el webhook en Calendly cuando el usuario conecta OAuth
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
+import { createClient } from '@supabase/supabase-js';
 
 function decryptToken(encryptedToken: string, encryptionKey: string): string {
   const [iv, authTag, encryptedData] = encryptedToken.split(':');
@@ -21,7 +20,7 @@ function decryptToken(encryptedToken: string, encryptionKey: string): string {
   return decrypted.toString('utf-8');
 }
 
-export async function GET(req: NextRequest) {
+export async function POST(req: NextRequest) {
   try {
     const authHeader = req.headers.get('authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -59,7 +58,6 @@ export async function GET(req: NextRequest) {
       .single();
 
     if (integError || !integration) {
-      console.warn('⚠️ Calendly integration not found');
       return NextResponse.json({ error: 'Calendly not configured' }, { status: 400 });
     }
 
@@ -88,99 +86,71 @@ export async function GET(req: NextRequest) {
     }
 
     const meData = await meResponse.json();
-    const calendlyUserId = meData.resource.uri; // ej: https://api.calendly.com/users/123abc
+    const calendlyUserId = meData.resource.uri;
 
     console.log('✅ Got Calendly user:', calendlyUserId);
 
-    // 2. Obtener event_types del usuario
-    const eventTypesResponse = await fetch(`https://api.calendly.com/users/${calendlyUserId}/event_types`, {
+    // 2. Obtener webhooks existentes
+    const webhooksResponse = await fetch(`https://api.calendly.com/users/${calendlyUserId}/webhook_subscriptions`, {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
       },
     });
 
-    if (!eventTypesResponse.ok) {
-      throw new Error('Failed to get event types');
+    let existingWebhook = null;
+    const webhookUrl = 'https://re-glob-school.vercel.app/api/calendly/webhook';
+
+    if (webhooksResponse.ok) {
+      const webhooksData = await webhooksResponse.json();
+      const webhooks = webhooksData.collection || [];
+      existingWebhook = webhooks.find((wh: any) => wh.callback_url === webhookUrl);
+
+      if (existingWebhook) {
+        console.log('✅ Webhook already exists:', existingWebhook.uri);
+        return NextResponse.json({
+          success: true,
+          message: 'Webhook already configured',
+          webhookUri: existingWebhook.uri,
+        });
+      }
     }
 
-    const eventTypesData = await eventTypesResponse.json();
-    const eventTypes = eventTypesData.collection || [];
-
-    if (eventTypes.length === 0) {
-      console.warn('⚠️ No event types found');
-      return NextResponse.json({ error: 'No event types configured in Calendly' }, { status: 400 });
-    }
-
-    // Usar el primer event type activo
-    const eventType = eventTypes.find((et: any) => et.active !== false);
-    if (!eventType) {
-      return NextResponse.json({ error: 'No active event types' }, { status: 400 });
-    }
-
-    console.log('✅ Using event type:', eventType.uri);
-
-    // 3. Obtener available_times para los próximos N días
-    const days = parseInt(req.nextUrl.searchParams.get('days') || '14');
-    const startDate = new Date();
-    startDate.setHours(0, 0, 0, 0);
-    const endDate = new Date(startDate);
-    endDate.setDate(endDate.getDate() + days);
-
-    const params = new URLSearchParams({
-      ascending: 'true',
-      sort: 'start_time',
-      max_results: '100',
-    });
-
-    const availableTimesResponse = await fetch(
-      `https://api.calendly.com/event_types/${eventType.uri.split('/').pop()}/available_times?${params}`,
+    // 3. Crear nuevo webhook
+    const createWebhookResponse = await fetch(
+      `https://api.calendly.com/users/${calendlyUserId}/webhook_subscriptions`,
       {
+        method: 'POST',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
         },
+        body: JSON.stringify({
+          url: webhookUrl,
+          events: ['invitee.created'],
+          signing_key: process.env.CALENDLY_WEBHOOK_SIGNING_KEY || 'reglobschool-signing-key',
+        }),
       }
     );
 
-    if (!availableTimesResponse.ok) {
-      const errorText = await availableTimesResponse.text();
-      console.error('❌ Available times error:', availableTimesResponse.status, errorText);
-      throw new Error('Failed to get available times');
+    if (!createWebhookResponse.ok) {
+      const errorData = await createWebhookResponse.json();
+      console.error('❌ Webhook creation error:', errorData);
+      throw new Error(`Failed to create webhook: ${errorData.message || 'Unknown error'}`);
     }
 
-    const availableTimesData = await availableTimesResponse.json();
-    const availableTimes = availableTimesData.collection || [];
+    const webhookData = await createWebhookResponse.json();
+    const webhookUri = webhookData.resource.uri;
 
-    // Agrupar por fecha
-    const availability: Record<string, string[]> = {};
-    availableTimes.forEach((slot: any) => {
-      const dateTime = new Date(slot.start_time);
-      const dateStr = dateTime.toISOString().split('T')[0];
-      const timeStr = dateTime.toISOString().split('T')[1].substring(0, 5); // HH:MM
-
-      if (!availability[dateStr]) {
-        availability[dateStr] = [];
-      }
-      if (!availability[dateStr].includes(timeStr)) {
-        availability[dateStr].push(timeStr);
-      }
-    });
-
-    // Ordenar horas dentro de cada fecha
-    Object.keys(availability).forEach((date) => {
-      availability[date].sort();
-    });
-
-    console.log('✅ Availability loaded:', Object.keys(availability).length, 'dates');
+    console.log('✅ Webhook created:', webhookUri);
 
     return NextResponse.json({
       success: true,
-      availability,
-      eventTypeUri: eventType.uri,
+      message: 'Webhook configured successfully',
+      webhookUri,
     });
   } catch (error) {
-    console.error('🔥 Availability error:', error);
+    console.error('🔥 Configure webhook error:', error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Server error' },
       { status: 500 }

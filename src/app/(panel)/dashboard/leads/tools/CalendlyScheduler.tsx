@@ -141,13 +141,21 @@ export default function CalendlyScheduler({
       const eventResult = await createEventResponse.json();
       console.log('✅ Evento creado:', eventResult);
 
+      // Llamar callback para indicar éxito
       onEventScheduled({
         event_type: 'Meeting',
         start_time: startTime,
         invitee_name: inviteeName,
         invitee_email: inviteeEmail,
-        calendly_uri: eventResult.eventUri,
+        invitee_link: eventResult.inviteeLink,
       });
+
+      // Abrir Calendly en nueva ventana después de un breve delay
+      if (eventResult.inviteeLink) {
+        setTimeout(() => {
+          window.open(eventResult.inviteeLink, '_blank', 'width=800,height=600');
+        }, 500);
+      }
 
       setSubmitting(false);
       console.log('✅ Flujo completado');

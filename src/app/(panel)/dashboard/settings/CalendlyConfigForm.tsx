@@ -36,13 +36,14 @@ export default function CalendlyConfigForm({
   );
   const [editingUrl, setEditingUrl] = useState(false);
   const [savingUrl, setSavingUrl] = useState(false);
+  const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
 
   // Verificar si hay una URL de callback exitosa
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('calendly_success') === 'true') {
-      // Guardar el token de la cookie en user_integrations
-      const saveTokenToDb = async () => {
+      // Guardar el token de la cookie en user_integrations y configurar webhook
+      const saveTokenAndConfigureWebhook = async () => {
         try {
           const response = await fetch('/api/auth/calendly/save-token', {
             method: 'POST',
@@ -54,6 +55,32 @@ export default function CalendlyConfigForm({
           if (response.ok) {
             setSuccess(true);
             setIsOAuthConnected(true);
+
+            // Configurar webhook automáticamente
+            try {
+              const { data: sessionData } = await supabase.auth.getSession();
+              const token = sessionData.session?.access_token;
+
+              if (token) {
+                const webhookResponse = await fetch('/api/calendly/configure-webhook', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                  },
+                });
+
+                if (webhookResponse.ok) {
+                  const webhookData = await webhookResponse.json();
+                  console.log('✅ Webhook configured:', webhookData.webhookUri);
+                } else {
+                  console.warn('⚠️ Webhook configuration failed');
+                }
+              }
+            } catch (webhookErr) {
+              console.warn('⚠️ Error configuring webhook:', webhookErr);
+            }
+
             onSaved?.();
 
             // Limpiar URL
@@ -72,7 +99,7 @@ export default function CalendlyConfigForm({
         }
       };
 
-      saveTokenToDb();
+      saveTokenAndConfigureWebhook();
     } else if (params.get('calendly_error')) {
       const errorMsg = params.get('calendly_error');
       setError(`Error de OAuth: ${errorMsg}`);
@@ -95,8 +122,6 @@ export default function CalendlyConfigForm({
   };
 
   const handleDisconnect = async () => {
-    if (!confirm('¿Desconectar Calendly?')) return;
-
     setLoading(true);
     setError(null);
 
@@ -112,13 +137,16 @@ export default function CalendlyConfigForm({
 
       if (err) throw err;
 
-      setIsOAuthConnected(false);
-      setSuccess(false);
-      onSaved?.();
+      console.log('✅ Desconectado de Calendly');
+      setShowDisconnectConfirm(false);
+
+      // Recargar página para traer datos actualizados de BD
+      setTimeout(() => {
+        window.location.reload();
+      }, 500);
     } catch (err) {
       console.error('Error disconnecting:', err);
       setError(err instanceof Error ? err.message : 'Error desconectando');
-    } finally {
       setLoading(false);
     }
   };
@@ -235,20 +263,51 @@ export default function CalendlyConfigForm({
           )}
         </div>
 
-        <button
-          onClick={handleDisconnect}
-          disabled={loading}
-          className="w-full px-4 py-2 bg-slate-200 hover:bg-slate-300 disabled:bg-slate-300 text-slate-700 text-xs font-bold rounded-lg transition-colors"
-        >
-          {loading ? (
-            <span className="flex items-center justify-center gap-2">
-              <Loader2 size={14} className="animate-spin" />
-              Desconectando...
-            </span>
-          ) : (
-            'Desconectar de Calendly'
-          )}
-        </button>
+        {showDisconnectConfirm && (
+          <div className="p-4 bg-red-50 border border-red-200 rounded-lg space-y-3">
+            <p className="text-xs font-bold text-red-900">¿Desconectar Calendly?</p>
+            <p className="text-xs text-red-700">Tendrás que reconectar para volver a usar la integración.</p>
+            <div className="flex gap-2">
+              <button
+                onClick={handleDisconnect}
+                disabled={loading}
+                className="flex-1 px-3 py-2 bg-red-600 hover:bg-red-700 disabled:bg-slate-300 text-white text-xs font-bold rounded-lg transition-colors"
+              >
+                {loading ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <Loader2 size={14} className="animate-spin" />
+                  </span>
+                ) : (
+                  'Sí, desconectar'
+                )}
+              </button>
+              <button
+                onClick={() => setShowDisconnectConfirm(false)}
+                disabled={loading}
+                className="flex-1 px-3 py-2 bg-slate-200 hover:bg-slate-300 disabled:bg-slate-300 text-slate-700 text-xs font-bold rounded-lg transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
+
+        {!showDisconnectConfirm && (
+          <button
+            onClick={() => setShowDisconnectConfirm(true)}
+            disabled={loading}
+            className="w-full px-4 py-2 bg-slate-200 hover:bg-slate-300 disabled:bg-slate-300 text-slate-700 text-xs font-bold rounded-lg transition-colors"
+          >
+            {loading ? (
+              <span className="flex items-center justify-center gap-2">
+                <Loader2 size={14} className="animate-spin" />
+                Desconectando...
+              </span>
+            ) : (
+              'Desconectar de Calendly'
+            )}
+          </button>
+        )}
 
         <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg">
           <p className="text-[10px] text-slate-600">
