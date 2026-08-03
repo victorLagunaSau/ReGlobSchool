@@ -163,17 +163,14 @@ export async function POST(req: NextRequest) {
     const meetingId = meetingData.id;
     console.log('✅ Meeting saved:', meetingId);
 
-    // GUARDAR COMENTARIO: formato "Reunión- Etapa X: ..."
-    const stageNumber = stageId.split('-')[0] || stageId;
-    const noteText = `Reunión- Etapa ${stageTitulo}: ${inviteeName} (${inviteeEmail}) - ${startTime}${inviteePhone ? ` - ${inviteePhone}` : ''}`;
+    // GUARDAR COMENTARIO: formato "Reunión agendada - Etapa 3 - Nombre (email, phone) - timestamp"
+    const noteText = `Reunión agendada - Etapa ${stageNumero} - ${inviteeName} (${inviteeEmail}, ${inviteePhone}) - ${startTime}`;
 
     const { error: noteErr } = await supabase
       .from('lead_attempt_notes')
       .insert({
         lead_id: leadId,
         stage_id: stageId,
-        stage_clave: stageId,
-        stage_titulo: stageTitulo,
         note_type: 'reunion_agendada',
         note_text: noteText,
       });
