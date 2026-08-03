@@ -97,7 +97,6 @@ export default function CalendlyScheduler({
     try {
       console.log('📅 Agendando reunión...');
 
-      // Obtener token ANTES
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
 
@@ -107,10 +106,9 @@ export default function CalendlyScheduler({
 
       console.log('✅ Token obtenido:', token.substring(0, 20) + '...');
 
-      // Combinar fecha y hora en ISO format
       const startTime = `${selectedDate}T${selectedTime}:00`;
 
-      // 1. Crear evento en Calendly
+      // API route maneja: Calendly, BD (lead_meetings), comentarios
       const createEventResponse = await fetch('/api/calendly/create-event', {
         method: 'POST',
         headers: {
@@ -135,71 +133,8 @@ export default function CalendlyScheduler({
       }
 
       const eventResult = await createEventResponse.json();
-      console.log('✅ Evento creado en Calendly');
+      console.log('✅ Evento creado:', eventResult);
 
-      // 2. Guardar en BD
-      const { data: userData } = await supabase.auth.getUser();
-      const userId = userData.user?.id;
-
-      if (!userId) throw new Error('No user authenticated');
-
-      // UPDATE o INSERT
-      const { data: updateData, error: updateErr } = await supabase
-        .from('lead_meetings')
-        .update({
-          event_type: 'Meeting',
-          start_time: startTime,
-          invitee_name: inviteeName,
-          invitee_email: inviteeEmail,
-          invitee_phone: inviteePhone,
-          calendly_uri: eventResult.eventUri,
-          status: 'agendada',
-        })
-        .eq('lead_id', leadId)
-        .select('id')
-        .single();
-
-      let meetingId: string;
-
-      if (updateErr && updateErr.code === 'PGRST116') {
-        const { data: insertData, error: insertErr } = await supabase
-          .from('lead_meetings')
-          .insert({
-            lead_id: leadId,
-            user_id: userId,
-            event_type: 'Meeting',
-            start_time: startTime,
-            invitee_name: inviteeName,
-            invitee_email: inviteeEmail,
-            invitee_phone: inviteePhone,
-            calendly_uri: eventResult.eventUri,
-            status: 'agendada',
-          })
-          .select('id')
-          .single();
-
-        if (insertErr) throw insertErr;
-        meetingId = insertData.id;
-      } else if (updateErr) {
-        throw updateErr;
-      } else {
-        meetingId = updateData.id;
-      }
-
-      console.log('✅ Reunión guardada en BD:', meetingId);
-
-      // 3. Guardar comentario
-      await supabase.from('lead_attempt_notes').insert({
-        lead_id: leadId,
-        stage_clave: '103',
-        stage_titulo: 'Reunión de Demostración',
-        note_type: 'reunion_agendada',
-        note_text: `📅 Reunión agendada\n👤 ${inviteeName} (${inviteeEmail})\n🕐 ${selectedDate} a las ${selectedTime}`,
-      });
-
-      console.log('✅ Comentario guardado');
-
-      // 4. Notificar
       onEventScheduled({
         event_type: 'Meeting',
         start_time: startTime,

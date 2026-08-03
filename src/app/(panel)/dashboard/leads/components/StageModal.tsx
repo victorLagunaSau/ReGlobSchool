@@ -177,30 +177,29 @@ export default function StageModal({
 
   const loadMeetingDetails = async () => {
     try {
+      // Traer reunión más reciente con status 'agendada' (puede haber múltiples)
       const { data, error: err } = await supabase
         .from('lead_meetings')
         .select('*')
         .eq('lead_id', leadId)
         .eq('status', 'agendada')
-        .single();
+        .order('created_at', { ascending: false })
+        .limit(1);
 
-      if (err && err.code !== 'PGRST116') {
-        // PGRST116 = no rows found (es normal si no hay reunión agendada)
-        throw err;
-      }
+      if (err) throw err;
 
-      if (data) {
+      if (data && data.length > 0) {
+        const meeting = data[0];
         setEventScheduled(true);
         setMeetingDetails({
-          title: data.event_type,
-          startTime: data.start_time,
-          endTime: data.end_time,
-          inviteeName: data.invitee_name,
-          inviteeEmail: data.invitee_email,
-          calendlyUri: data.calendly_uri,
+          title: meeting.event_type,
+          startTime: meeting.start_time,
+          endTime: meeting.end_time,
+          inviteeName: meeting.invitee_name,
+          inviteeEmail: meeting.invitee_email,
+          calendlyUri: meeting.calendly_uri,
         });
       } else {
-        // Si no hay reunión agendada, resetear estados
         setEventScheduled(false);
         setMeetingDetails({
           title: '',
