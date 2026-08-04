@@ -122,6 +122,7 @@ export default function StageModal({
   // Estado para stages destino (obtenidos desde continuar_a_id y regresar_a_id)
   const [failStage, setFailStage] = useState<{ clave: string; titulo: string } | null>(null);
   const [successStage, setSuccessStage] = useState<{ clave: string; titulo: string } | null>(null);
+  const [nextStage, setNextStage] = useState<{ clave: string; titulo: string } | null>(null);
 
   // Cargar stages destino desde los UUIDs (continuar_a_id y regresar_a_id)
   useEffect(() => {
@@ -129,7 +130,7 @@ export default function StageModal({
 
     const loadDestinationStages = async () => {
       try {
-        // Cargar fail stage (regresar_a_id)
+        // Cargar fail stage (regresar_a_id) - para TipoReunionActions
         if (currentStage.regresar_a_id) {
           const { data, error } = await supabase
             .from('pipeline_stages')
@@ -140,7 +141,7 @@ export default function StageModal({
           if (data) setFailStage({ clave: data.clave, titulo: data.titulo });
         }
 
-        // Cargar success stage (continuar_a_id)
+        // Cargar success/next stage (continuar_a_id) - para TipoReunionActions y TipoContactoActions
         if (currentStage.continuar_a_id) {
           const { data, error } = await supabase
             .from('pipeline_stages')
@@ -148,7 +149,10 @@ export default function StageModal({
             .eq('id', currentStage.continuar_a_id)
             .single();
           if (error) throw error;
-          if (data) setSuccessStage({ clave: data.clave, titulo: data.titulo });
+          if (data) {
+            setSuccessStage({ clave: data.clave, titulo: data.titulo });
+            setNextStage({ clave: data.clave, titulo: data.titulo });
+          }
         }
       } catch (err) {
         console.error('Error loading destination stages:', err);
@@ -666,8 +670,8 @@ export default function StageModal({
                   stageTitle={currentStage.titulo}
                   stageNumber={String(currentStage.orden)}
                   stageClave={currentStage.clave}
-                  nextStageClave={stageConfig.nextStageClave}
-                  nextStageTitle={stageConfig.nextStageTitle}
+                  nextStageClave={nextStage?.clave || stageConfig.nextStageClave}
+                  nextStageTitle={nextStage?.titulo || stageConfig.nextStageTitle}
                   onSuccess={handleSuccess}
                 />
               )}
