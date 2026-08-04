@@ -102,7 +102,10 @@ export default function LeadsConfig({ stages, onRefresh }: LeadsConfigProps) {
           .from('pipeline_stages')
           .insert([data]);
 
-        if (error) throw error;
+        if (error) {
+          console.error('Supabase error:', error);
+          throw new Error(error.message || 'Error al guardar');
+        }
       }
 
       setIsModalOpen(false);

@@ -73,7 +73,7 @@ export default function TipoReunionActions({
           stage_clave: stageClave,
           stage_titulo: stageTitle,
           attempt_number: 1,
-          note_type: 'back',
+          note_type: 'retry',
           note_text: autoCompletedNotes,
         });
 
