@@ -6,7 +6,7 @@ import RetryAction from './RetryAction';
 import ContinueAction from './ContinueAction';
 import DeleteAction from './DeleteAction';
 
-interface Etapa2ActionsProps {
+interface TipoContactoActionsProps {
   leadId: string;
   notes: string;
   minAttempts?: number;
@@ -20,7 +20,7 @@ interface Etapa2ActionsProps {
   onSuccess?: (shouldClose?: boolean) => void;
 }
 
-export default function Etapa2Actions({
+export default function TipoContactoActions({
   leadId,
   notes,
   minAttempts = 0,
@@ -32,7 +32,7 @@ export default function Etapa2Actions({
   nextStageClave = '103',
   nextStageTitle = 'Reunión de Demostración',
   onSuccess,
-}: Etapa2ActionsProps) {
+}: TipoContactoActionsProps) {
   const [showRetryOptions, setShowRetryOptions] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 

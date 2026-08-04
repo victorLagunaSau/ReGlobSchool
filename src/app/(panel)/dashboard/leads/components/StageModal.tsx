@@ -16,7 +16,7 @@ import ReunionSteps from './ReunionSteps';
 // Accionables
 import CalendarizeAction from '../actions/CalendarizeAction';
 import ContactAttemptAction from '../actions/ContactAttemptAction';
-import Etapa2Actions from '../actions/Etapa2Actions';
+import TipoContactoActions from '../actions/TipoContactoActions';
 import Reunion from './Reunion';
 import Documentacion from './Documentacion';
 import Exito from './Exito';
@@ -615,7 +615,7 @@ export default function StageModal({
               )}
 
               {stageConfig.actions === 'contact-attempt' && (
-                <Etapa2Actions
+                <TipoContactoActions
                   leadId={leadId}
                   notes={notes}
                   minAttempts={currentStage.intentos_requeridos || 0}
