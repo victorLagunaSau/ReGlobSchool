@@ -55,10 +55,8 @@ interface StageModalProps {
     tipo?: string;
     limite_pospuestas?: number;
     intentos_requeridos?: number;
-    fail_stage_clave?: string;
-    fail_stage_titulo?: string;
-    success_stage_clave?: string;
-    success_stage_titulo?: string;
+    regresar_a_id?: string | null;
+    continuar_a_id?: string | null;
   } | null;
   onClose: () => void;
   onSuccess?: () => void;
@@ -120,6 +118,45 @@ export default function StageModal({
   // Estado para registrar llamadas/emails
   const [isRegisteringCall, setIsRegisteringCall] = useState(false);
   const [isRegisteringEmail, setIsRegisteringEmail] = useState(false);
+
+  // Estado para stages destino (obtenidos desde continuar_a_id y regresar_a_id)
+  const [failStage, setFailStage] = useState<{ clave: string; titulo: string } | null>(null);
+  const [successStage, setSuccessStage] = useState<{ clave: string; titulo: string } | null>(null);
+
+  // Cargar stages destino desde los UUIDs (continuar_a_id y regresar_a_id)
+  useEffect(() => {
+    if (!currentStage) return;
+
+    const loadDestinationStages = async () => {
+      try {
+        // Cargar fail stage (regresar_a_id)
+        if (currentStage.regresar_a_id) {
+          const { data, error } = await supabase
+            .from('pipeline_stages')
+            .select('clave, titulo')
+            .eq('id', currentStage.regresar_a_id)
+            .single();
+          if (error) throw error;
+          if (data) setFailStage({ clave: data.clave, titulo: data.titulo });
+        }
+
+        // Cargar success stage (continuar_a_id)
+        if (currentStage.continuar_a_id) {
+          const { data, error } = await supabase
+            .from('pipeline_stages')
+            .select('clave, titulo')
+            .eq('id', currentStage.continuar_a_id)
+            .single();
+          if (error) throw error;
+          if (data) setSuccessStage({ clave: data.clave, titulo: data.titulo });
+        }
+      } catch (err) {
+        console.error('Error loading destination stages:', err);
+      }
+    };
+
+    loadDestinationStages();
+  }, [currentStage]);
 
   // Cargar notas anteriores, contactos, datos de reunión y ubicación
   useEffect(() => {
@@ -650,22 +687,8 @@ export default function StageModal({
                       stageTitle={currentStage.titulo}
                       stageNumber={String(currentStage.orden)}
                       stageClave={currentStage.clave}
-                      failStage={
-                        currentStage.fail_stage_clave && currentStage.fail_stage_titulo
-                          ? {
-                              clave: currentStage.fail_stage_clave,
-                              titulo: currentStage.fail_stage_titulo,
-                            }
-                          : undefined
-                      }
-                      successStage={
-                        currentStage.success_stage_clave && currentStage.success_stage_titulo
-                          ? {
-                              clave: currentStage.success_stage_clave,
-                              titulo: currentStage.success_stage_titulo,
-                            }
-                          : undefined
-                      }
+                      failStage={failStage || undefined}
+                      successStage={successStage || undefined}
                       onSuccess={handleSuccess}
                     />
                   )}

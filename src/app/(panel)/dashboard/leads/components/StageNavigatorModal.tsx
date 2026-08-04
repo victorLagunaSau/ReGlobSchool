@@ -13,10 +13,8 @@ interface PipelineStage {
   siguiente_etapa_id?: string | null;
   limite_pospuestas?: number;
   intentos_requeridos?: number;
-  fail_stage_clave?: string;
-  fail_stage_titulo?: string;
-  success_stage_clave?: string;
-  success_stage_titulo?: string;
+  regresar_a_id?: string | null;
+  continuar_a_id?: string | null;
 }
 
 interface StageNavigatorModalProps {
