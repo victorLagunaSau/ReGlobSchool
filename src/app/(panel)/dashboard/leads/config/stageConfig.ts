@@ -62,8 +62,8 @@ export const stageConfig: Record<StageClave, StageConfig> = {
     nextStageTitle: 'Propuesta',
     failStageClave: '102',
     failStageTitle: 'Contacto Inicial',
-    successStageClave: '104',
-    successStageTitle: 'Propuesta',
+    successStageClave: '999',
+    successStageTitle: 'Cierre de Lead',
   },
 
   // Etapa 4 - Propuesta
@@ -98,6 +98,12 @@ export const stageConfig: Record<StageClave, StageConfig> = {
   '401': {
     tipo: 'negociacion',
     actions: 'negociacion',
+  },
+
+  // Etapa 9 - Cierre de Lead
+  '999': {
+    tipo: 'cierre',
+    actions: 'cierre',
   },
 };
 
