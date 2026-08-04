@@ -106,7 +106,38 @@ export async function deleteLeadArchive({
       if (deleteNotesError) throw deleteNotesError;
     }
 
-    // 4. Delete from original tables (order matters: FK dependencies)
+    // 4. Archive meetings to deleted_lead_meetings
+    const { data: meetingsData, error: meetingsFetchError } = await supabase
+      .from('lead_meetings')
+      .select('*')
+      .eq('lead_id', leadId);
+
+    if (meetingsFetchError) throw meetingsFetchError;
+
+    if (meetingsData && meetingsData.length > 0) {
+      const meetingsToArchive = meetingsData.map((meeting: any) => ({
+        original_meeting_id: meeting.id,
+        lead_id: meeting.lead_id,
+        stage_id: meeting.stage_id,
+        meeting_date: meeting.meeting_date,
+        start_time: meeting.start_time,
+        end_time: meeting.end_time,
+        invitee_name: meeting.invitee_name,
+        invitee_email: meeting.invitee_email,
+        invitee_phone: meeting.invitee_phone,
+        status: meeting.status,
+        google_calendar_event_id: meeting.google_calendar_event_id,
+        metadata: JSON.stringify(meeting),
+      }));
+
+      const { error: deleteMeetingsError } = await supabase
+        .from('deleted_lead_meetings')
+        .insert(meetingsToArchive);
+
+      if (deleteMeetingsError) throw deleteMeetingsError;
+    }
+
+    // 5. Delete from original tables (order matters: FK dependencies)
     // Delete contacts first (they reference leads)
     const { error: deleteContactsDbError } = await supabase
       .from('lead_contacts')
@@ -122,6 +153,14 @@ export async function deleteLeadArchive({
       .eq('lead_id', leadId);
 
     if (deleteNotesDbError) throw deleteNotesDbError;
+
+    // Delete meetings
+    const { error: deleteMeetingsDbError } = await supabase
+      .from('lead_meetings')
+      .delete()
+      .eq('lead_id', leadId);
+
+    if (deleteMeetingsDbError) throw deleteMeetingsDbError;
 
     // Delete lead (last, after dependent data)
     const { error: deleteLeadDbError } = await supabase
