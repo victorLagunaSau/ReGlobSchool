@@ -96,7 +96,7 @@ export async function GET(req: NextRequest) {
     const month = parseInt(partsInitial.find(p => p.type === 'month')!.value) - 1;
     const day = parseInt(partsInitial.find(p => p.type === 'day')!.value);
 
-    const startDate = new Date(year, month, day, 9, 0, 0, 0); // 9 AM CDMX
+    const startDate = new Date(year, month, day, 8, 0, 0, 0); // 8 AM CDMX
 
     const endDate = new Date(startDate);
     endDate.setDate(endDate.getDate() + days);
@@ -220,8 +220,8 @@ export async function GET(req: NextRequest) {
       const hour = parseInt(hourStr);
       const minute = parseInt(minuteStr);
 
-      // Lunes (1) a Viernes (5), 9 AM a 4:59 PM
-      if (dayOfWeek >= 1 && dayOfWeek <= 5 && hour >= 9 && hour < 17) {
+      // Lunes (1) a Viernes (5), 8 AM a 4:59 PM
+      if (dayOfWeek >= 1 && dayOfWeek <= 5 && hour >= 8 && hour < 17) {
         const dateStr = `${yearStr}-${monthStr}-${dayStr}`;
         const timeStr = `${hourStr}:${minuteStr}`;
         const slotId = `${dateStr}T${timeStr}`;

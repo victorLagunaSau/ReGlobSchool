@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { AlertCircle, Loader2, Calendar, Clock } from 'lucide-react';
+import { AlertCircle, Loader2, Calendar, Clock, ChevronRight } from 'lucide-react';
 import { supabase } from '@/src/lib/supabase/client';
 
 interface GoogleCalendarSchedulerProps {
@@ -34,6 +34,9 @@ export default function GoogleCalendarScheduler({
   const [existingMeeting, setExistingMeeting] = useState<any>(null);
   const [meetingIsFuture, setMeetingIsFuture] = useState(false);
   const [shouldShowForm, setShouldShowForm] = useState(true);
+
+  // Step control: 1=Fecha, 2=Hora, 3=Datos
+  const [step, setStep] = useState(1);
 
   // Form state
   const [inviteeName, setInviteeName] = useState(lead?.business_name || '');
@@ -89,7 +92,7 @@ export default function GoogleCalendarScheduler({
           return;
         }
 
-        const response = await fetch('/api/google-calendar/availability?days=30', {
+        const response = await fetch('/api/google-calendar/availability?days=21', {
           headers: {
             'Authorization': `Bearer ${token}`,
           },
@@ -257,12 +260,14 @@ export default function GoogleCalendarScheduler({
     return null;
   }
 
+  // Renderizar interfaz estilo Calendly
   return (
-    <form onSubmit={handleSchedule} className={`space-y-3 p-3 rounded-lg transition-colors ${
-      scheduled ? 'bg-emerald-50 border border-emerald-200' : ''
+    <div className={`space-y-4 p-4 rounded-lg transition-colors ${
+      scheduled ? 'bg-emerald-50 border border-emerald-200' : 'bg-slate-50'
     }`}>
+      {/* Mensaje de éxito */}
       {scheduled && (
-        <div className="flex items-start gap-2 p-2 bg-emerald-100 border border-emerald-300 rounded-lg mb-2">
+        <div className="flex items-start gap-2 p-3 bg-emerald-100 border border-emerald-300 rounded-lg">
           <span className="text-sm font-bold text-emerald-700">✓ Reunión agendada correctamente</span>
         </div>
       )}
@@ -274,111 +279,163 @@ export default function GoogleCalendarScheduler({
         </div>
       )}
 
-      {/* Nombre */}
-      <div>
-        <label className="text-xs font-semibold text-slate-700">Nombre del cliente</label>
-        <input
-          type="text"
-          value={inviteeName}
-          onChange={(e) => setInviteeName(e.target.value)}
-          placeholder="Ej: Juan Pérez"
-          className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-blue-500"
-          disabled={submitting}
-        />
-      </div>
+      {!scheduled ? (
+        <form onSubmit={handleSchedule} className="space-y-4">
+          {/* PASO 1: SELECCIONAR FECHA */}
+          {step === 1 && (
+            <div className="space-y-3">
+              <h3 className="text-sm font-bold text-slate-900">Selecciona una fecha</h3>
+              <div className="grid grid-cols-3 gap-2 max-h-64 overflow-y-auto">
+                {availableDates.map((date) => {
+                  const [year, month, day] = date.split('-');
+                  const d = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+                  const dayName = d.toLocaleDateString('es-ES', { weekday: 'short' });
+                  const dayNum = d.getDate();
+                  const isSelected = selectedDate === date;
 
-      {/* Email */}
-      <div>
-        <label className="text-xs font-semibold text-slate-700">Email</label>
-        <input
-          type="email"
-          value={inviteeEmail}
-          onChange={(e) => setInviteeEmail(e.target.value)}
-          placeholder="cliente@example.com"
-          className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-blue-500"
-          disabled={submitting}
-        />
-      </div>
+                  return (
+                    <button
+                      key={date}
+                      type="button"
+                      onClick={() => {
+                        setSelectedDate(date);
+                        setSelectedTime('');
+                        setStep(2);
+                      }}
+                      className={`p-3 rounded-lg border-2 transition-colors text-center ${
+                        isSelected
+                          ? 'border-blue-600 bg-blue-50 text-blue-900 font-bold'
+                          : 'border-slate-200 bg-white text-slate-700 hover:border-blue-300'
+                      }`}
+                    >
+                      <div className="text-xs font-semibold">{dayName}</div>
+                      <div className="text-sm font-bold">{dayNum}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
-      {/* Teléfono */}
-      <div>
-        <label className="text-xs font-semibold text-slate-700">Teléfono</label>
-        <input
-          type="tel"
-          value={inviteePhone}
-          onChange={(e) => setInviteePhone(e.target.value)}
-          placeholder="+52 1234567890"
-          className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-blue-500"
-          disabled={submitting}
-        />
-      </div>
+          {/* PASO 2: SELECCIONAR HORA */}
+          {step === 2 && selectedDate && (
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={() => setStep(1)}
+                className="text-xs text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1"
+              >
+                ← Cambiar fecha
+              </button>
+              <h3 className="text-sm font-bold text-slate-900">Selecciona una hora</h3>
+              <div className="grid grid-cols-3 gap-2 max-h-64 overflow-y-auto">
+                {availability[selectedDate]?.map((time) => {
+                  const isSelected = selectedTime === time;
+                  return (
+                    <button
+                      key={time}
+                      type="button"
+                      onClick={() => {
+                        setSelectedTime(time);
+                        setStep(3);
+                      }}
+                      className={`p-3 rounded-lg border-2 transition-colors text-center ${
+                        isSelected
+                          ? 'border-blue-600 bg-blue-50 text-blue-900 font-bold'
+                          : 'border-slate-200 bg-white text-slate-700 hover:border-blue-300'
+                      }`}
+                    >
+                      <div className="text-sm font-bold">{time}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
-      {/* Fecha */}
-      <div>
-        <label className="text-xs font-semibold text-slate-700 flex items-center gap-1">
-          <Calendar size={14} /> Selecciona fecha
-        </label>
-        <select
-          value={selectedDate}
-          onChange={(e) => {
-            setSelectedDate(e.target.value);
-            setSelectedTime('');
-          }}
-          className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-blue-500 focus:ring-2 focus:ring-blue-200 bg-white text-slate-900"
-          disabled={submitting}
-        >
-          <option value="">-- Selecciona un día --</option>
-          {availableDates.map((date) => {
-            const [year, month, day] = date.split('-');
-            const d = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-            const label = d.toLocaleDateString('es-ES', {
-              weekday: 'long',
-              month: 'short',
-              day: 'numeric',
-            });
-            return (
-              <option key={date} value={date} className="bg-white text-slate-900">
-                {label}
-              </option>
-            );
-          })}
-        </select>
-      </div>
+          {/* PASO 3: DATOS */}
+          {step === 3 && selectedDate && selectedTime && (
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={() => setStep(2)}
+                className="text-xs text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1"
+              >
+                ← Cambiar hora
+              </button>
+              <h3 className="text-sm font-bold text-slate-900">Tus datos</h3>
 
-      {/* Hora */}
-      {selectedDate && (
-        <div>
-          <label className="text-xs font-semibold text-slate-700 flex items-center gap-1">
-            <Clock size={14} /> Selecciona hora
-          </label>
-          <select
-            value={selectedTime}
-            onChange={(e) => setSelectedTime(e.target.value)}
-            className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-blue-500 focus:ring-2 focus:ring-blue-200 bg-white text-slate-900"
-            disabled={submitting}
-          >
-            <option value="">-- Selecciona una hora --</option>
-            {availability[selectedDate]?.map((time) => (
-              <option key={time} value={time} className="bg-white text-slate-900">
-                {time}
-              </option>
-            ))}
-          </select>
+              <div>
+                <label className="text-xs font-semibold text-slate-700">Nombre</label>
+                <input
+                  type="text"
+                  value={inviteeName}
+                  onChange={(e) => setInviteeName(e.target.value)}
+                  placeholder="Ej: Juan Pérez"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-blue-500"
+                  disabled={submitting}
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-700">Email</label>
+                <input
+                  type="email"
+                  value={inviteeEmail}
+                  onChange={(e) => setInviteeEmail(e.target.value)}
+                  placeholder="cliente@example.com"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-blue-500"
+                  disabled={submitting}
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-700">Teléfono</label>
+                <input
+                  type="tel"
+                  value={inviteePhone}
+                  onChange={(e) => setInviteePhone(e.target.value)}
+                  placeholder="+52 1234567890"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-blue-500"
+                  disabled={submitting}
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={submitting || !inviteeName || !inviteeEmail}
+                className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white text-sm font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
+              >
+                {submitting ? <Loader2 size={16} className="animate-spin" /> : <>Confirmar reunión</>}
+              </button>
+            </div>
+          )}
+
+          {/* Progress indicator */}
+          {!scheduled && (
+            <div className="flex gap-1 justify-center pt-2">
+              {[1, 2, 3].map((s) => (
+                <div
+                  key={s}
+                  className={`w-2 h-2 rounded-full transition-colors ${
+                    step >= s ? 'bg-blue-600' : 'bg-slate-300'
+                  }`}
+                />
+              ))}
+            </div>
+          )}
+        </form>
+      ) : (
+        <div className="space-y-2 py-2">
+          <div className="flex items-center gap-2">
+            <Calendar size={16} className="text-emerald-600" />
+            <span className="text-sm font-semibold text-emerald-900">{selectedDate} - {selectedTime}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-emerald-700">{inviteeName}</span>
+          </div>
         </div>
       )}
-
-      {/* Botón */}
-      <button
-        type="submit"
-        disabled={submitting || !inviteeName || !inviteeEmail || !selectedDate || !selectedTime || scheduled}
-        className={`w-full px-4 py-2 text-white text-sm font-bold rounded-lg transition-colors ${
-          scheduled
-            ? 'bg-emerald-600 cursor-default'
-            : 'bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300'
-        }`}
-      >
-        {submitting ? 'Agendando...' : scheduled ? '✓ Reunión agendada' : 'Confirmar Reunión'}
-      </button>
-    </form>
+    </div>
   );
 }
