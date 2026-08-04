@@ -156,18 +156,16 @@ export async function POST(req: NextRequest) {
           } else {
             const accessToken = decryptToken(encryptedToken, encryptionKey);
 
-            const startDateTime = new Date(startTime);
-            const endDateTime = new Date(endTime);
-
-            const formatDateTimeLocal = (date: Date) => {
-              const year = date.getFullYear();
-              const month = String(date.getMonth() + 1).padStart(2, '0');
-              const day = String(date.getDate()).padStart(2, '0');
-              const hours = String(date.getHours()).padStart(2, '0');
-              const minutes = String(date.getMinutes()).padStart(2, '0');
-              const seconds = String(date.getSeconds()).padStart(2, '0');
-              return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+            const formatDateTimeLocal = (dateStr: string) => {
+              // dateStr viene como "2026-08-04T16:30:00" (CDMX local, sin timezone)
+              // Necesitamos enviarlo a Google Calendar como CDMX, no UTC
+              // Google Calendar espera: dateTime en formato local + timeZone
+              // Simplemente retornar el string como viene (ya está en CDMX)
+              return dateStr;
             };
+
+            const startDateTime = formatDateTimeLocal(startTime);
+            const endDateTime = formatDateTimeLocal(endTime);
 
             const eventPayload = {
               summary: `Reunión: ${inviteeName}`,
