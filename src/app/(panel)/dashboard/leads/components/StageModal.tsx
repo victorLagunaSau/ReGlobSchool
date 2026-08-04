@@ -17,6 +17,7 @@ import ReunionSteps from './ReunionSteps';
 import CalendarizeAction from '../actions/CalendarizeAction';
 import ContactAttemptAction from '../actions/ContactAttemptAction';
 import TipoContactoActions from '../actions/TipoContactoActions';
+import TipoReunionActions from '../actions/TipoReunionActions';
 import Reunion from './Reunion';
 import Documentacion from './Documentacion';
 import Exito from './Exito';
@@ -631,15 +632,43 @@ export default function StageModal({
               )}
 
               {stageConfig.actions === 'reunion' && (
-                <Reunion
-                  leadId={leadId}
-                  lead={lead}
-                  notes={notes}
-                  stage={currentStage}
-                  eventScheduled={eventScheduled}
-                  onSuccess={handleSuccess}
-                  onCancel={onClose}
-                />
+                <>
+                  <Reunion
+                    leadId={leadId}
+                    lead={lead}
+                    notes={notes}
+                    stage={currentStage}
+                    eventScheduled={eventScheduled}
+                    onSuccess={handleSuccess}
+                    onCancel={onClose}
+                  />
+                  {eventScheduled && (
+                    <TipoReunionActions
+                      leadId={leadId}
+                      notes={notes}
+                      stageTitle={currentStage.titulo}
+                      stageNumber={String(currentStage.orden)}
+                      stageClave={currentStage.clave}
+                      failStage={
+                        stageConfig.failStageClave && stageConfig.failStageTitle
+                          ? {
+                              clave: stageConfig.failStageClave,
+                              titulo: stageConfig.failStageTitle,
+                            }
+                          : undefined
+                      }
+                      successStage={
+                        stageConfig.nextStageClave && stageConfig.nextStageTitle
+                          ? {
+                              clave: stageConfig.nextStageClave,
+                              titulo: stageConfig.nextStageTitle,
+                            }
+                          : undefined
+                      }
+                      onSuccess={handleSuccess}
+                    />
+                  )}
+                </>
               )}
 
               {stageConfig.actions === 'documentacion' && (

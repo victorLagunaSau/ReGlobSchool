@@ -17,6 +17,8 @@ interface StageConfig {
   minAttempts?: number;
   nextStageClave?: string;
   nextStageTitle?: string;
+  failStageClave?: string; // Si Falla → Regresar a:
+  failStageTitle?: string;
 }
 
 // Herramientas definidas por TIPO (no por clave)
@@ -56,12 +58,18 @@ export const stageConfig: Record<StageClave, StageConfig> = {
     actions: 'reunion',
     nextStageClave: '104',
     nextStageTitle: 'Propuesta',
+    failStageClave: '102',
+    failStageTitle: 'Contacto Inicial',
   },
 
   // Etapa 4 - Propuesta
   '104': {
     tipo: 'reunion',
     actions: 'proposal',
+    nextStageClave: '201',
+    nextStageTitle: 'Documentación',
+    failStageClave: '103',
+    failStageTitle: 'Reunión de Demostración',
   },
 
   // Etapa 5 - Documentación
