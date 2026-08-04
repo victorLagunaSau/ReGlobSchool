@@ -693,6 +693,9 @@ export default function StageModal({
                       stageClave={currentStage.clave}
                       failStage={failStage || undefined}
                       successStage={successStage || undefined}
+                      currentAttempts={currentAttempts}
+                      minAttempts={currentStage.intentos_requeridos || 0}
+                      maxAttempts={currentStage.limite_pospuestas || 0}
                       onSuccess={handleSuccess}
                     />
                   )}

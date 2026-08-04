@@ -20,6 +20,9 @@ interface TipoReunionActionsProps {
     titulo: string;
   };
   onSuccess?: (shouldClose?: boolean) => void;
+  currentAttempts?: number;
+  minAttempts?: number;
+  maxAttempts?: number;
 }
 
 export default function TipoReunionActions({
@@ -31,17 +34,25 @@ export default function TipoReunionActions({
   failStage,
   successStage,
   onSuccess,
+  currentAttempts = 0,
+  minAttempts = 0,
+  maxAttempts = 0,
 }: TipoReunionActionsProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isLoadingReagendar, setIsLoadingReagendar] = useState(false);
   const [isLoadingExito, setIsLoadingExito] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const hasNotes = notes.trim().length > 0;
+  const hasNotes = notes.trim().length >= 10;
+  const canDelete = currentAttempts >= minAttempts && minAttempts > 0;
 
   const handleDeleteClick = () => {
     if (!hasNotes) {
-      alert('Requiere comentario de actividad');
+      alert('Requiere comentario (mínimo 10 caracteres)');
+      return;
+    }
+    if (!canDelete) {
+      alert(`Requiere ${minAttempts} intentos mínimos`);
       return;
     }
     setShowDeleteConfirm(!showDeleteConfirm);
@@ -198,13 +209,13 @@ export default function TipoReunionActions({
         {/* ELIMINAR - 33% (Izquierda) */}
         <button
           onClick={handleDeleteClick}
-          disabled={!hasNotes}
+          disabled={(!canDelete || !hasNotes)}
           className={`flex-1 px-2 py-3 text-sm font-bold rounded-lg flex flex-col items-center justify-center gap-1.5 transition-colors ${
-            !hasNotes
+            ((!canDelete || !hasNotes))
               ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
               : 'bg-red-600 hover:bg-red-700 text-white'
           }`}
-          title={!hasNotes ? 'Requiere comentario de actividad' : ''}
+          title={!canDelete ? `Requiere ${minAttempts} intentos mínimos` : !hasNotes ? 'Requiere comentario (mínimo 10 caracteres)' : ''}
         >
           <Trash2 size={18} />
           <span>Eliminar</span>
@@ -249,9 +260,9 @@ export default function TipoReunionActions({
           stageNumber={stageNumber}
           stageClave={stageClave}
           notes={notes}
-          currentAttempts={0}
-          minAttempts={0}
-          maxAttempts={0}
+          currentAttempts={currentAttempts}
+          minAttempts={minAttempts}
+          maxAttempts={maxAttempts}
           onSuccess={() => {
             setShowDeleteConfirm(false);
             onSuccess?.(true);
