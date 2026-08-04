@@ -124,8 +124,23 @@ export async function POST(req: NextRequest) {
     const stageNumero = stageData?.orden || null;
     const stageClave = stageData?.clave || null;
 
+    // Convert CDMX local time to UTC for storage
+    // startTime comes as "2026-08-04T16:00:00" (CDMX local, no timezone)
+    // CDMX is UTC-6, so we need to ADD 6 hours to convert to UTC
+    const convertCDMXtoUTC = (localTimeStr: string): string => {
+      const [datePart, timePart] = localTimeStr.split('T');
+      const [year, month, day] = datePart.split('-').map(Number);
+      const [hours, minutes, seconds] = timePart.split(':').map(Number);
+
+      // Create date in UTC with the CDMX local time, then add 6 hours
+      const utcDate = new Date(Date.UTC(year, month - 1, day, hours + 6, minutes, seconds));
+      return utcDate.toISOString();
+    };
+
+    const startTimeUTC = convertCDMXtoUTC(startTime);
+
     // Calculate end time (30 minutes after start)
-    const startDate = new Date(startTime);
+    const startDate = new Date(startTimeUTC);
     startDate.setMinutes(startDate.getMinutes() + 30);
     const endTime = startDate.toISOString();
 
@@ -218,7 +233,7 @@ export async function POST(req: NextRequest) {
       googleError = 'Error creating Google Calendar event';
     }
 
-    // GUARDAR EN BD: lead_meetings
+    // GUARDAR EN BD: lead_meetings (usar timestamps UTC)
     const { data: meetingData, error: meetingErr } = await supabase
       .from('lead_meetings')
       .insert({
@@ -231,7 +246,7 @@ export async function POST(req: NextRequest) {
         invitee_name: inviteeName,
         invitee_email: inviteeEmail,
         invitee_phone: inviteePhone,
-        start_time: startTime,
+        start_time: startTimeUTC,
         end_time: endTime,
         status: 'agendada',
         calendly_uri: googleEventId, // Usar el mismo campo para Google Calendar event ID
