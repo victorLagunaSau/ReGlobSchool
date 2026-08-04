@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, Loader2, Info, Building2, FileText, Phone, Mail, MapPin, Plus } from 'lucide-react';
+import { X, Loader2, Info, Building2, FileText, Phone, Mail, MapPin, Plus, AlertCircle } from 'lucide-react';
 import { supabase } from '../../../../../lib/supabase/client';
 import { getStageConfig, getToolsByType } from '../config/stageConfig';
 import DecisionMakersForm from './DecisionMakersForm';
@@ -637,15 +637,12 @@ export default function StageModal({
 
               {stageConfig.actions === 'reunion' && (
                 <>
-                  <Reunion
-                    leadId={leadId}
-                    lead={lead}
-                    notes={notes}
-                    stage={currentStage}
-                    eventScheduled={eventScheduled}
-                    onSuccess={handleSuccess}
-                    onCancel={onClose}
-                  />
+                  {!eventScheduled && (
+                    <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                      <AlertCircle size={14} className="text-amber-600 flex-shrink-0 mt-0.5" />
+                      <p className="text-xs text-amber-700">No hay reunión agendada. Completa el Paso 1 primero.</p>
+                    </div>
+                  )}
                   {eventScheduled && (
                     <TipoReunionActions
                       leadId={leadId}
