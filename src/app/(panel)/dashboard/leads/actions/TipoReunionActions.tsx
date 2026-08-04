@@ -83,7 +83,7 @@ export default function TipoReunionActions({
       const { error: updateError } = await supabase
         .from('leads')
         .update({
-          current_stage_clave: failStage.clave,
+          status: failStage.clave,
           current_stage_attempts: 0,
         })
         .eq('id', leadId);
@@ -152,7 +152,7 @@ export default function TipoReunionActions({
       const { error: updateError } = await supabase
         .from('leads')
         .update({
-          current_stage_clave: successStage.clave,
+          status: successStage.clave,
           current_stage_attempts: 0,
         })
         .eq('id', leadId);

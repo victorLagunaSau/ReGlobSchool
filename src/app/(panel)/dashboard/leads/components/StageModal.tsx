@@ -651,18 +651,28 @@ export default function StageModal({
                       stageNumber={String(currentStage.orden)}
                       stageClave={currentStage.clave}
                       failStage={
-                        currentStage.fail_stage_clave && currentStage.fail_stage_titulo
+                        (currentStage.fail_stage_clave && currentStage.fail_stage_titulo)
                           ? {
                               clave: currentStage.fail_stage_clave,
                               titulo: currentStage.fail_stage_titulo,
                             }
+                          : (stageConfig.failStageClave && stageConfig.failStageTitle)
+                          ? {
+                              clave: stageConfig.failStageClave,
+                              titulo: stageConfig.failStageTitle,
+                            }
                           : undefined
                       }
                       successStage={
-                        currentStage.success_stage_clave && currentStage.success_stage_titulo
+                        (currentStage.success_stage_clave && currentStage.success_stage_titulo)
                           ? {
                               clave: currentStage.success_stage_clave,
                               titulo: currentStage.success_stage_titulo,
+                            }
+                          : (stageConfig.successStageClave && stageConfig.successStageTitle)
+                          ? {
+                              clave: stageConfig.successStageClave,
+                              titulo: stageConfig.successStageTitle,
                             }
                           : undefined
                       }

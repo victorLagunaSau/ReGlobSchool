@@ -19,6 +19,8 @@ interface StageConfig {
   nextStageTitle?: string;
   failStageClave?: string; // Si Falla → Regresar a:
   failStageTitle?: string;
+  successStageClave?: string; // Éxito → Continuar a:
+  successStageTitle?: string;
 }
 
 // Herramientas definidas por TIPO (no por clave)
@@ -60,6 +62,8 @@ export const stageConfig: Record<StageClave, StageConfig> = {
     nextStageTitle: 'Propuesta',
     failStageClave: '102',
     failStageTitle: 'Contacto Inicial',
+    successStageClave: '104',
+    successStageTitle: 'Propuesta',
   },
 
   // Etapa 4 - Propuesta
@@ -70,6 +74,8 @@ export const stageConfig: Record<StageClave, StageConfig> = {
     nextStageTitle: 'Documentación',
     failStageClave: '103',
     failStageTitle: 'Reunión de Demostración',
+    successStageClave: '201',
+    successStageTitle: 'Documentación',
   },
 
   // Etapa 5 - Documentación
