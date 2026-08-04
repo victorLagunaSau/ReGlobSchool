@@ -55,6 +55,10 @@ interface StageModalProps {
     tipo?: string;
     limite_pospuestas?: number;
     intentos_requeridos?: number;
+    fail_stage_clave?: string;
+    fail_stage_titulo?: string;
+    success_stage_clave?: string;
+    success_stage_titulo?: string;
   } | null;
   onClose: () => void;
   onSuccess?: () => void;
@@ -650,18 +654,18 @@ export default function StageModal({
                       stageNumber={String(currentStage.orden)}
                       stageClave={currentStage.clave}
                       failStage={
-                        stageConfig.failStageClave && stageConfig.failStageTitle
+                        currentStage.fail_stage_clave && currentStage.fail_stage_titulo
                           ? {
-                              clave: stageConfig.failStageClave,
-                              titulo: stageConfig.failStageTitle,
+                              clave: currentStage.fail_stage_clave,
+                              titulo: currentStage.fail_stage_titulo,
                             }
                           : undefined
                       }
                       successStage={
-                        stageConfig.nextStageClave && stageConfig.nextStageTitle
+                        currentStage.success_stage_clave && currentStage.success_stage_titulo
                           ? {
-                              clave: stageConfig.nextStageClave,
-                              titulo: stageConfig.nextStageTitle,
+                              clave: currentStage.success_stage_clave,
+                              titulo: currentStage.success_stage_titulo,
                             }
                           : undefined
                       }
