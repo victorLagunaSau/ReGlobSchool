@@ -14,13 +14,25 @@ interface ReunionStepsProps {
     calendlyUri?: string;
   };
   calendlyComponent?: ReactNode;
+  meetingIsPast?: boolean;
 }
 
 export default function ReunionSteps({
   eventScheduled,
   meetingDetails,
   calendlyComponent,
+  meetingIsPast,
 }: ReunionStepsProps) {
+  // Determinar si la reunión es pasada
+  const isReunionPast = meetingIsPast || (meetingDetails?.startTime && new Date(meetingDetails.startTime) < new Date());
+
+  // Colores según si es pasada (amarillo) o futura (verde)
+  const containerBg = isReunionPast ? 'bg-amber-50' : 'bg-green-50';
+  const containerBorder = isReunionPast ? 'border-amber-200' : 'border-green-200';
+  const textColor = isReunionPast ? 'text-amber-700' : 'text-green-700';
+  const titleColor = isReunionPast ? 'text-amber-900' : 'text-green-900';
+  const iconColor = isReunionPast ? 'text-amber-600' : 'text-green-600';
+
   return (
     <div className="space-y-4">
       {/* PASO 1: AGENDAR REUNIÓN */}
@@ -69,12 +81,12 @@ export default function ReunionSteps({
             <h4 className="text-sm font-bold text-slate-900">VER REUNIÓN</h4>
           </div>
 
-          <div className="ml-8 space-y-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className={`ml-8 space-y-3 p-4 rounded-lg border ${containerBg} ${containerBorder}`}>
             <div className="flex items-start gap-3">
-              <Calendar size={16} className="text-blue-600 flex-shrink-0 mt-0.5" />
+              <Calendar size={16} className={`${iconColor} flex-shrink-0 mt-0.5`} />
               <div>
-                <p className="text-xs font-semibold text-blue-900">Fecha y Hora</p>
-                <p className="text-xs text-blue-700">
+                <p className={`text-xs font-semibold ${titleColor}`}>Fecha y Hora</p>
+                <p className={`text-xs ${textColor}`}>
                   {meetingDetails?.startTime
                     ? new Date(meetingDetails.startTime).toLocaleDateString('es-ES', {
                         weekday: 'long',
@@ -91,18 +103,18 @@ export default function ReunionSteps({
             </div>
 
             <div className="flex items-start gap-3">
-              <User size={16} className="text-blue-600 flex-shrink-0 mt-0.5" />
+              <User size={16} className={`${iconColor} flex-shrink-0 mt-0.5`} />
               <div>
-                <p className="text-xs font-semibold text-blue-900">Invitado</p>
-                <p className="text-xs text-blue-700">{meetingDetails?.inviteeName || '-'}</p>
+                <p className={`text-xs font-semibold ${titleColor}`}>Invitado</p>
+                <p className={`text-xs ${textColor}`}>{meetingDetails?.inviteeName || '-'}</p>
               </div>
             </div>
 
             <div className="flex items-start gap-3">
-              <Mail size={16} className="text-blue-600 flex-shrink-0 mt-0.5" />
+              <Mail size={16} className={`${iconColor} flex-shrink-0 mt-0.5`} />
               <div>
-                <p className="text-xs font-semibold text-blue-900">Email</p>
-                <p className="text-xs text-blue-700">{meetingDetails?.inviteeEmail || '-'}</p>
+                <p className={`text-xs font-semibold ${titleColor}`}>Email</p>
+                <p className={`text-xs ${textColor}`}>{meetingDetails?.inviteeEmail || '-'}</p>
               </div>
             </div>
           </div>
