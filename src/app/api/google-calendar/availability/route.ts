@@ -127,27 +127,48 @@ export async function GET(req: NextRequest) {
     const eventsData = await eventsResponse.json();
     const events = eventsData.items || [];
 
+    // Helper: Convertir tiempo a CDMX local
+    const formatToCDMXLocal = (date: Date): { dateStr: string; timeStr: string } => {
+      const fmt = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/Mexico_City',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
+      const parts = fmt.formatToParts(date);
+      const year = parts.find(p => p.type === 'year')!.value;
+      const month = parts.find(p => p.type === 'month')!.value;
+      const day = parts.find(p => p.type === 'day')!.value;
+      const hour = parts.find(p => p.type === 'hour')!.value;
+      const minute = parts.find(p => p.type === 'minute')!.value;
+      return {
+        dateStr: `${year}-${month}-${day}`,
+        timeStr: `${hour}:${minute}`
+      };
+    };
+
     // Crear set de horarios ocupados
     const occupiedSlots = new Set<string>();
 
-    // 1. Agregar eventos de Google Calendar
+    // 1. Agregar eventos de Google Calendar - CONVERTIR A CDMX LOCAL
     events.forEach((event: any) => {
       if (event.start?.dateTime && event.end?.dateTime) {
         const eventStart = new Date(event.start.dateTime);
         const eventEnd = new Date(event.end.dateTime);
 
-        // Marcar todos los slots durante el evento como ocupados
         let current = new Date(eventStart);
         while (current < eventEnd) {
-          const dateStr = current.toISOString().split('T')[0];
-          const timeStr = current.toISOString().split('T')[1].substring(0, 5);
+          const { dateStr, timeStr } = formatToCDMXLocal(current);
           occupiedSlots.add(`${dateStr}T${timeStr}`);
-          current.setMinutes(current.getMinutes() + 30); // Slots de 30 min
+          current.setMinutes(current.getMinutes() + 30);
         }
       }
     });
 
-    // 2. Agregar reuniones agendadas en BD (para reflejar cambios inmediatos)
+    // 2. Agregar reuniones agendadas en BD - CONVERTIR A CDMX LOCAL
     const { data: meetings, error: meetingsErr } = await supabase
       .from('lead_meetings')
       .select('start_time, end_time')
@@ -162,8 +183,7 @@ export async function GET(req: NextRequest) {
 
         let current = new Date(meetStart);
         while (current < meetEnd) {
-          const dateStr = current.toISOString().split('T')[0];
-          const timeStr = current.toISOString().split('T')[1].substring(0, 5);
+          const { dateStr, timeStr } = formatToCDMXLocal(current);
           occupiedSlots.add(`${dateStr}T${timeStr}`);
           current.setMinutes(current.getMinutes() + 30);
         }
