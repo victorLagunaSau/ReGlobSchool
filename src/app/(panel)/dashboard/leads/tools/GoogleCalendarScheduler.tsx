@@ -52,13 +52,13 @@ export default function GoogleCalendarScheduler({
       try {
         setLoading(true);
 
-        // 1. Cargar reunión anterior para este lead en esta etapa
+        // 1. Cargar reunión con fecha/hora más futura para este lead en esta etapa
         const { data: meetings, error: meetingsErr } = await supabase
           .from('lead_meetings')
           .select('*')
           .eq('lead_id', leadId)
           .eq('stage_id', stageId)
-          .order('created_at', { ascending: false })
+          .order('start_time', { ascending: false })
           .limit(1);
 
         if (!meetingsErr && meetings && meetings.length > 0) {
