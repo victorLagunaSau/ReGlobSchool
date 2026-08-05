@@ -628,8 +628,8 @@ export default function StageModal({
                 </div>
               )}
 
-              {/* Progreso de Intentos (solo para Etapa 2) */}
-              {currentStage.clave === '102' && currentStage.limite_pospuestas && (
+              {/* Progreso de Intentos (para todas las etapas tipo contacto) */}
+              {currentStage.tipo === 'contacto' && currentStage.limite_pospuestas && (
                 <div className="space-y-2 mb-4">
                   <p className="text-xs text-slate-700">
                     Intentos <span className="font-bold text-slate-900">{currentAttempts} de {currentStage.limite_pospuestas}</span>
