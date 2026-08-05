@@ -192,15 +192,21 @@ export default function StageModal({
       if (err) throw err;
       setAttemptNotes(data || []);
 
-      // Cargar contador de intentos de la etapa actual desde leads
-      const { data: leadData, error: leadErr } = await supabase
-        .from('leads')
-        .select('current_stage_attempts')
-        .eq('id', leadId)
-        .single();
+      // Contar intentos de la etapa ACTUAL específicamente
+      if (currentStage) {
+        const { data: stageAttempts, error: attemptErr } = await supabase
+          .from('lead_attempt_notes')
+          .select('attempt_number')
+          .eq('lead_id', leadId)
+          .eq('stage_clave', currentStage.clave)
+          .order('attempt_number', { ascending: false })
+          .limit(1);
 
-      if (leadErr) throw leadErr;
-      setCurrentAttempts(leadData?.current_stage_attempts || 0);
+        if (attemptErr) throw attemptErr;
+
+        const maxAttemptNumber = stageAttempts?.[0]?.attempt_number || 0;
+        setCurrentAttempts(maxAttemptNumber);
+      }
     } catch (err) {
       console.error('Error loading attempt notes:', err);
     } finally {
