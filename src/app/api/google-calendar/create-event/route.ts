@@ -22,6 +22,78 @@ function decryptToken(encryptedToken: string, encryptionKey: string): string {
   return decrypted.toString('utf-8');
 }
 
+function encryptToken(token: string, encryptionKey: string): string {
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv(
+    'aes-256-gcm',
+    Buffer.from(encryptionKey, 'hex'),
+    iv
+  );
+  let encrypted = cipher.update(token, 'utf-8', 'hex');
+  encrypted += cipher.final('hex');
+  const authTag = cipher.getAuthTag();
+  return `${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted}`;
+}
+
+async function refreshGoogleToken(
+  refreshToken: string,
+  supabase: any,
+  userId: string,
+  encryptionKey: string
+): Promise<string> {
+  try {
+    const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
+
+    if (!clientId || !clientSecret) {
+      throw new Error('Google OAuth credentials not configured');
+    }
+
+    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        refresh_token: refreshToken,
+        grant_type: 'refresh_token',
+      }).toString(),
+    });
+
+    if (!tokenResponse.ok) {
+      throw new Error(`Failed to refresh token: ${tokenResponse.status}`);
+    }
+
+    const tokenData = await tokenResponse.json();
+    const newAccessToken = tokenData.access_token;
+
+    if (!newAccessToken) {
+      throw new Error('No access token in refresh response');
+    }
+
+    const encryptedNewToken = encryptToken(newAccessToken, encryptionKey);
+
+    await supabase
+      .from('user_integrations')
+      .update({
+        tokens: {
+          access_token: encryptedNewToken,
+          refresh_token: encryptToken(refreshToken, encryptionKey),
+        },
+        updated_at: new Date().toISOString(),
+      })
+      .eq('user_id', userId)
+      .eq('provider', 'google_calendar');
+
+    return newAccessToken;
+  } catch (error) {
+    console.error('Error refreshing Google token:', error);
+    throw error;
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -162,6 +234,7 @@ export async function POST(req: NextRequest) {
         googleError = 'Google Calendar not configured';
       } else {
         const encryptedToken = integration.tokens?.access_token;
+        const encryptedRefreshToken = integration.tokens?.refresh_token;
         if (!encryptedToken) {
           googleError = 'Google Calendar token missing';
         } else {
@@ -169,13 +242,9 @@ export async function POST(req: NextRequest) {
           if (!encryptionKey) {
             googleError = 'Server configuration error';
           } else {
-            const accessToken = decryptToken(encryptedToken, encryptionKey);
+            let accessToken = decryptToken(encryptedToken, encryptionKey);
 
             const formatDateTimeLocal = (dateStr: string) => {
-              // dateStr viene como "2026-08-04T16:30:00" (CDMX local, sin timezone)
-              // Necesitamos enviarlo a Google Calendar como CDMX, no UTC
-              // Google Calendar espera: dateTime en formato local + timeZone
-              // Simplemente retornar el string como viene (ya está en CDMX)
               return dateStr;
             };
 
@@ -206,7 +275,7 @@ export async function POST(req: NextRequest) {
 
             const payloadJson = JSON.stringify(eventPayload);
 
-            const createEventResponse = await fetch(
+            let createEventResponse = await fetch(
               'https://www.googleapis.com/calendar/v3/calendars/primary/events',
               {
                 method: 'POST',
@@ -218,10 +287,30 @@ export async function POST(req: NextRequest) {
               }
             );
 
-            if (!createEventResponse.ok) {
+            if (createEventResponse.status === 401 && encryptedRefreshToken) {
+              const refreshToken = decryptToken(encryptedRefreshToken, encryptionKey);
+              try {
+                accessToken = await refreshGoogleToken(refreshToken, supabase, userId, encryptionKey);
+                createEventResponse = await fetch(
+                  'https://www.googleapis.com/calendar/v3/calendars/primary/events',
+                  {
+                    method: 'POST',
+                    headers: {
+                      'Authorization': `Bearer ${accessToken}`,
+                      'Content-Type': 'application/json',
+                    },
+                    body: payloadJson,
+                  }
+                );
+              } catch (refreshError) {
+                googleError = 'Google Calendar session expired. Please reconnect your account.';
+              }
+            }
+
+            if (!createEventResponse.ok && !googleError) {
               const errorData = await createEventResponse.text();
-              googleError = `Google Calendar error: ${createEventResponse.status} - ${errorData}`;
-            } else {
+              googleError = `Google Calendar error: ${createEventResponse.status}`;
+            } else if (createEventResponse.ok) {
               const eventData = await createEventResponse.json();
               googleEventId = eventData.id;
               googleEventLink = eventData.htmlLink;
