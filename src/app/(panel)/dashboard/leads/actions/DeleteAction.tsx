@@ -49,7 +49,7 @@ export default function DeleteAction({
   }, []);
 
   const hasNotes = notes.trim().length >= 10;
-  const canDelete = currentAttempts >= minAttempts && minAttempts > 0;
+  const canDelete = minAttempts === 0 ? true : currentAttempts >= minAttempts;
   const canConfirm = canDelete && hasNotes && secondsLeft === 0;
 
   const handleDelete = async () => {

@@ -256,8 +256,8 @@ export default function TipoReunionActions({
           stageNumber={stageNumber}
           stageClave={stageClave}
           notes={notes}
-          currentAttempts={currentAttempts}
-          minAttempts={minAttempts}
+          currentAttempts={0}
+          minAttempts={0}
           maxAttempts={maxAttempts}
           onSuccess={() => {
             setShowDeleteConfirm(false);
