@@ -660,7 +660,7 @@ export default function StageModal({
                 />
               )}
 
-              {stageConfig.actions === 'contact-attempt' && (
+              {stageConfig.tipo === 'contacto' && (
                 <TipoContactoActions
                   leadId={leadId}
                   notes={notes}
@@ -676,7 +676,7 @@ export default function StageModal({
                 />
               )}
 
-              {stageConfig.actions === 'reunion' && (
+              {stageConfig.tipo === 'reunion' && (
                 <>
                   {!eventScheduled && (
                     <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
