@@ -44,15 +44,11 @@ export default function TipoReunionActions({
   const [error, setError] = useState<string | null>(null);
 
   const hasNotes = notes.trim().length >= 10;
-  const canDelete = currentAttempts >= minAttempts && minAttempts > 0;
+  const canDelete = hasNotes;
 
   const handleDeleteClick = () => {
     if (!hasNotes) {
       alert('Requiere comentario (mínimo 10 caracteres)');
-      return;
-    }
-    if (!canDelete) {
-      alert(`Requiere ${minAttempts} intentos mínimos`);
       return;
     }
     setShowDeleteConfirm(!showDeleteConfirm);
@@ -209,13 +205,13 @@ export default function TipoReunionActions({
         {/* ELIMINAR - 33% (Izquierda) */}
         <button
           onClick={handleDeleteClick}
-          disabled={(!canDelete || !hasNotes)}
+          disabled={!hasNotes}
           className={`flex-1 px-2 py-3 text-sm font-bold rounded-lg flex flex-col items-center justify-center gap-1.5 transition-colors ${
-            ((!canDelete || !hasNotes))
+            !hasNotes
               ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
               : 'bg-red-600 hover:bg-red-700 text-white'
           }`}
-          title={!canDelete ? `Requiere ${minAttempts} intentos mínimos` : !hasNotes ? 'Requiere comentario (mínimo 10 caracteres)' : ''}
+          title={!hasNotes ? 'Requiere comentario (mínimo 10 caracteres)' : ''}
         >
           <Trash2 size={18} />
           <span>Eliminar</span>
