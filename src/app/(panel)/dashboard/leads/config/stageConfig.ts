@@ -58,12 +58,13 @@ export const stageConfig: Record<StageClave, StageConfig> = {
     nextStageTitle: 'Propuesta',
   },
 
-  // Etapa 4 - Propuesta
+  // Etapa 4 - Reagendar Reunión
   '104': {
-    tipo: 'reunion',
-    actions: 'proposal',
-    nextStageClave: '201',
-    nextStageTitle: 'Documentación',
+    tipo: 'contacto',
+    actions: 'contact-attempt',
+    minAttempts: 6,
+    nextStageClave: '103',
+    nextStageTitle: 'Reunión de Demostración',
   },
 
   // Etapa 5 - Documentación
