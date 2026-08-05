@@ -551,7 +551,7 @@ export default function StageModal({
                 />
               )}
 
-              {currentStage.clave === '103' && (
+              {currentStage.tipo === 'reunion' && (
                 <ReunionSteps
                   eventScheduled={eventScheduled}
                   meetingDetails={meetingDetails}
