@@ -557,6 +557,17 @@ export default function StageModal({
                   }
                 />
               )}
+
+              {currentStage.tipo === 'documentacion' && (
+                <TipoDocumentacionActions
+                  leadId={leadId}
+                  notes={notes}
+                  stageTitle={currentStage.titulo}
+                  stageNumber={String(currentStage.orden)}
+                  stageClave={currentStage.clave}
+                  onSuccess={handleSuccess}
+                />
+              )}
             </div>
 
             {/* Acciones */}
@@ -650,17 +661,6 @@ export default function StageModal({
                     />
                   )}
                 </>
-              )}
-
-              {currentStage.tipo === 'documentacion' && (
-                <TipoDocumentacionActions
-                  leadId={leadId}
-                  notes={notes}
-                  stageTitle={currentStage.titulo}
-                  stageNumber={String(currentStage.orden)}
-                  stageClave={currentStage.clave}
-                  onSuccess={handleSuccess}
-                />
               )}
 
               {currentStage.tipo === 'exito' && (
