@@ -212,20 +212,24 @@ export default function TipoDocumentacionActions({
         updateData.resent_at = new Date().toISOString();
       }
 
-      const { error: err } = await supabase
+      const { error: err, data } = await supabase
         .from('document_submissions')
         .update(updateData)
-        .eq('id', submissionId);
+        .eq('id', submissionId)
+        .select();
 
-      if (err) throw err;
+      if (err) {
+        console.error('Supabase error details:', err);
+        throw new Error(err.message || 'Error actualizando documento en base de datos');
+      }
 
       const actionMap = { aceptado: 'accepted', rechazado: 'rejected', reenviado: 'resent' };
       await generateComment(actionMap[status], docName);
 
       await loadSubmissions();
     } catch (err: any) {
-      console.error('Error updating submission:', err);
-      alert('Error actualizando documento');
+      console.error('Error updating submission:', err?.message || err);
+      alert('Error actualizando documento: ' + (err?.message || 'Desconocido'));
     }
   };
 
