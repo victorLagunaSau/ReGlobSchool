@@ -257,6 +257,12 @@ export default function LeadsKanban({ leads, states, stages, onRefresh }: LeadsK
                         bgColor: 'bg-purple-600 hover:bg-purple-700',
                         title: 'Reagendar reunión',
                       },
+                      documentacion: {
+                        label: 'Trabajar',
+                        icon: <Mail size={11} />,
+                        bgColor: 'bg-green-600 hover:bg-green-700',
+                        title: 'Gestionar documentación',
+                      },
                     };
 
                     const config = leadStage.tipo ? buttonConfig[leadStage.tipo as keyof typeof buttonConfig] : null;
