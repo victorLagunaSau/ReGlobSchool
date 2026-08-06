@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Trash2, Plus, AlertCircle, Loader2, Check, Upload, RefreshCw, X } from 'lucide-react';
+import { Trash2, Plus, AlertCircle, Loader2, Check, Upload, RefreshCw, X, Download } from 'lucide-react';
 import { supabase } from '../../../../../lib/supabase/client';
 import DeleteAction from './DeleteAction';
 
@@ -32,6 +32,8 @@ interface TipoDocumentacionActionsProps {
   stageNumber?: string;
   stageClave?: string;
   onSuccess?: (shouldClose?: boolean) => void;
+  onCommentAdded?: () => void;
+  onAllAcceptedChange?: (allAccepted: boolean) => void;
 }
 
 const DOCUMENTOS_PREDEFINIDOS = [
@@ -51,6 +53,8 @@ export default function TipoDocumentacionActions({
   stageNumber = '5',
   stageClave = '201',
   onSuccess,
+  onCommentAdded,
+  onAllAcceptedChange,
 }: TipoDocumentacionActionsProps) {
   const [documents, setDocuments] = useState<LeadDocument[]>([]);
   const [submissions, setSubmissions] = useState<Record<string, DocumentSubmission[]>>({});
@@ -65,6 +69,18 @@ export default function TipoDocumentacionActions({
     loadDocuments();
     loadSubmissions();
   }, [leadId]);
+
+  // Notificar si todos los documentos están aceptados
+  useEffect(() => {
+    const allAccepted =
+      documents.length > 0 &&
+      documents.every(d => {
+        const docSubmissions = submissions[d.id] || [];
+        const latestSubmission = docSubmissions[0];
+        return latestSubmission && latestSubmission.status === 'aceptado';
+      });
+    onAllAcceptedChange?.(allAccepted);
+  }, [documents, submissions, onAllAcceptedChange]);
 
   const loadDocuments = async () => {
     try {
@@ -109,7 +125,8 @@ export default function TipoDocumentacionActions({
   };
 
   const generateComment = async (action: string, docName: string) => {
-    const timestamp = new Date().toLocaleDateString('es-ES', {
+    const now = new Date();
+    const timestamp = now.toLocaleDateString('es-ES', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
@@ -117,18 +134,27 @@ export default function TipoDocumentacionActions({
       minute: '2-digit',
     });
 
-    let commentText = '';
+    let statusLabel = '';
+    let noteType = '';
+
     if (action === 'uploaded') {
-      commentText = `📄 Documento adjuntado: "${docName}" (${timestamp})`;
+      statusLabel = 'Adjuntado';
+      noteType = 'documento';
     } else if (action === 'accepted') {
-      commentText = `✅ Documento aceptado: "${docName}" (${timestamp})`;
+      statusLabel = 'Aceptado';
+      noteType = 'success';
     } else if (action === 'rejected') {
-      commentText = `❌ Documento rechazado: "${docName}" (${timestamp})`;
+      statusLabel = 'Rechazado';
+      noteType = 'retry';
     } else if (action === 'resent') {
-      commentText = `🔄 Documento reenviado: "${docName}" (${timestamp})`;
+      statusLabel = 'Reenviado';
+      noteType = 'retry';
     }
 
-    if (!commentText) return;
+    if (!statusLabel) return;
+
+    const stageTitle = `Documentacion - ${statusLabel}`;
+    const noteText = `${docName} - ${statusLabel}`;
 
     try {
       await supabase.from('lead_attempt_notes').insert({
@@ -136,8 +162,8 @@ export default function TipoDocumentacionActions({
         stage_clave: stageClave,
         stage_titulo: stageTitle,
         attempt_number: 1,
-        note_type: 'documento',
-        note_text: commentText,
+        note_type: noteType,
+        note_text: noteText,
       });
     } catch (err: any) {
       console.error('Error creating comment:', err);
@@ -156,45 +182,91 @@ export default function TipoDocumentacionActions({
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       if (sessionError || !session?.user?.id) throw new Error('Usuario no autenticado');
 
+      const docSubmissions = submissions[docId] || [];
+      const existingSubmission = docSubmissions[0];
+
+      // Si existe un archivo anterior, eliminarlo
+      if (existingSubmission?.file_path) {
+        try {
+          await supabase.storage
+            .from('lead_docs')
+            .remove([existingSubmission.file_path]);
+        } catch (deleteErr: any) {
+          console.warn('No se pudo eliminar archivo anterior:', deleteErr?.message);
+          // Continuar aunque falle la eliminación
+        }
+      }
+
       // Generar nombre único para el archivo
       const timestamp = Date.now();
       const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
       const filePath = `${leadId}/${docId}/${timestamp}_${sanitizedName}`;
 
       // Subir a Storage
-      const { error: uploadError, data } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from('lead_docs')
         .upload(filePath, file);
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        throw new Error(`Error subiendo archivo a Storage: ${uploadError.message}`);
+      }
 
-      // Obtener URL pública
-      const { data: publicUrl } = supabase.storage
+      // Obtener URL firmada (válida por 1 año)
+      const { data, error: signError } = await supabase.storage
         .from('lead_docs')
-        .getPublicUrl(filePath);
+        .createSignedUrl(filePath, 60 * 60 * 24 * 365); // 1 año
 
-      // Guardar en document_submissions
-      const { error: dbError } = await supabase
-        .from('document_submissions')
-        .insert({
-          lead_id: leadId,
-          document_id: docId,
-          file_url: publicUrl.publicUrl,
-          file_path: filePath,
-          status: 'pendiente',
-          submitted_by: session.user.id,
-        });
+      if (signError || !data?.signedUrl) {
+        throw new Error(`No se pudo obtener URL del archivo: ${signError?.message || 'desconocido'}`);
+      }
 
-      if (dbError) throw dbError;
+      const publicUrl = { publicUrl: data.signedUrl };
 
-      // Generar comentario
+      if (existingSubmission) {
+        // Reemplazar submission existente
+        const { error: updateError } = await supabase
+          .from('document_submissions')
+          .update({
+            file_url: publicUrl.publicUrl,
+            file_path: filePath,
+            status: 'pendiente',
+            submitted_at: new Date().toISOString(),
+            accepted_at: null,
+            rejected_at: null,
+            resent_at: null,
+          })
+          .eq('id', existingSubmission.id)
+          .select();
+
+        if (updateError) {
+          throw new Error(`Error actualizando submission: ${updateError.message}`);
+        }
+      } else {
+        // Crear nueva submission
+        const { error: dbError } = await supabase
+          .from('document_submissions')
+          .insert({
+            lead_id: leadId,
+            document_id: docId,
+            file_url: publicUrl.publicUrl,
+            file_path: filePath,
+            status: 'pendiente',
+          })
+          .select();
+
+        if (dbError) {
+          throw new Error(`Error creando submission: ${dbError.message}`);
+        }
+      }
+
+      // Generar comentario y refrescar
       await generateComment('uploaded', doc.nombre);
-
-      // Recargar
       await loadSubmissions();
+      onCommentAdded?.();
     } catch (err: any) {
-      console.error('Error uploading file:', err);
-      alert('Error subiendo archivo: ' + (err?.message || 'Desconocido'));
+      const errorMsg = err?.message || JSON.stringify(err) || 'Error desconocido';
+      console.error('Error uploading file:', errorMsg);
+      alert('Error subiendo archivo: ' + errorMsg);
     } finally {
       setUploadingDocId(null);
     }
@@ -227,6 +299,9 @@ export default function TipoDocumentacionActions({
       await generateComment(actionMap[status], docName);
 
       await loadSubmissions();
+
+      // Refrescar comentarios en tiempo real sin cerrar modal
+      onCommentAdded?.();
     } catch (err: any) {
       console.error('Error updating submission:', err?.message || err);
       alert('Error actualizando documento: ' + (err?.message || 'Desconocido'));
@@ -272,24 +347,13 @@ export default function TipoDocumentacionActions({
     setNewDocName('');
   };
 
-  const handleUpdateDoc = async (docId: string, updates: Partial<LeadDocument>) => {
-    try {
-      const { error: err } = await supabase
-        .from('lead_documents')
-        .update(updates)
-        .eq('id', docId);
-
-      if (err) throw err;
-      setDocuments(documents.map(d => d.id === docId ? { ...d, ...updates } : d));
-    } catch (err: any) {
-      console.error('Error updating document:', err);
-      alert('Error actualizando documento');
-    }
-  };
-
   const allDeliveredAndAccepted =
     documents.length > 0 &&
-    documents.every(d => d.entregado && d.aceptado_estado === 'aceptado');
+    documents.every(d => {
+      const docSubmissions = submissions[d.id] || [];
+      const latestSubmission = docSubmissions[0];
+      return latestSubmission && latestSubmission.status === 'aceptado';
+    });
 
   const hasNotes = notes.trim().length >= 10;
 
@@ -327,13 +391,7 @@ export default function TipoDocumentacionActions({
                 <div key={doc.id} className="p-3 bg-white rounded border border-slate-200 space-y-2">
                   {/* Header del documento */}
                   <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={doc.entregado}
-                      onChange={(e) => handleUpdateDoc(doc.id, { entregado: e.target.checked })}
-                      className="w-4 h-4"
-                    />
-                    <span className={`flex-1 text-xs font-medium ${doc.entregado ? 'line-through text-slate-400' : 'text-slate-700'}`}>
+                    <span className="flex-1 text-xs font-medium text-slate-700">
                       {doc.nombre}
                     </span>
                   </div>
@@ -349,7 +407,7 @@ export default function TipoDocumentacionActions({
                             : 'bg-slate-100 text-slate-600 hover:bg-green-50'
                         }`}
                       >
-                        ✓ Aceptado
+                        Aceptado
                       </button>
                       <button
                         onClick={() => updateSubmissionStatus(latestSubmission.id, 'rechazado', doc.nombre)}
@@ -359,7 +417,7 @@ export default function TipoDocumentacionActions({
                             : 'bg-slate-100 text-slate-600 hover:bg-rose-50'
                         }`}
                       >
-                        ✗ Rechazado
+                        Rechazado
                       </button>
                       <button
                         onClick={() => updateSubmissionStatus(latestSubmission.id, 'reenviado', doc.nombre)}
@@ -369,28 +427,51 @@ export default function TipoDocumentacionActions({
                             : 'bg-slate-100 text-slate-600 hover:bg-blue-50'
                         }`}
                       >
-                        🔄 Reenviar
+                        Reenviar
                       </button>
                     </div>
                   )}
 
-                  {/* Upload file */}
-                  <label className="flex items-center gap-2 px-2 py-1.5 text-xs bg-blue-50 border border-blue-200 rounded cursor-pointer hover:bg-blue-100 transition-colors">
-                    <Upload size={12} className="text-blue-600" />
-                    <span className="text-blue-600 font-medium">
-                      {uploadingDocId === doc.id ? 'Subiendo...' : 'Adjuntar archivo'}
-                    </span>
-                    <input
-                      type="file"
-                      hidden
-                      onChange={(e) => {
-                        if (e.target.files?.[0]) {
-                          handleUploadFile(doc.id, e.target.files[0]);
-                        }
-                      }}
-                      disabled={uploadingDocId === doc.id}
-                    />
-                  </label>
+                  {/* Upload/Replace file */}
+                  <div className="flex gap-2">
+                    <label className="flex-1 flex items-center gap-2 px-2 py-1.5 text-xs bg-blue-50 border border-blue-200 rounded cursor-pointer hover:bg-blue-100 transition-colors">
+                      <Upload size={12} className="text-blue-600" />
+                      <span className="text-blue-600 font-medium">
+                        {uploadingDocId === doc.id ? 'Subiendo...' : latestSubmission ? 'Reemplazar' : 'Adjuntar archivo'}
+                      </span>
+                      <input
+                        type="file"
+                        hidden
+                        onChange={(e) => {
+                          if (e.target.files?.[0]) {
+                            handleUploadFile(doc.id, e.target.files[0]);
+                          }
+                        }}
+                        disabled={uploadingDocId === doc.id}
+                      />
+                    </label>
+
+                    {/* Download button */}
+                    {latestSubmission?.file_url && (
+                      <button
+                        onClick={() => {
+                          const link = document.createElement('a');
+                          link.href = latestSubmission.file_url;
+                          // Remover timestamp del nombre: "1234567_nombre.pdf" → "nombre.pdf"
+                          const filename = latestSubmission.file_path?.split('/').pop() || 'archivo';
+                          const cleanFilename = filename.replace(/^\d+_/, '');
+                          link.download = cleanFilename;
+                          document.body.appendChild(link);
+                          link.click();
+                          document.body.removeChild(link);
+                        }}
+                        className="flex items-center gap-2 px-2 py-1.5 text-xs bg-green-50 border border-green-200 rounded hover:bg-green-100 transition-colors text-green-600 font-medium"
+                      >
+                        <Download size={12} />
+                        <span>Descargar</span>
+                      </button>
+                    )}
+                  </div>
 
                   {/* Historial de submissions */}
                   {docSubmissions.length > 0 && (

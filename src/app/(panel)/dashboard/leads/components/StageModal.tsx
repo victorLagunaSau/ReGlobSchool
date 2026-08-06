@@ -105,6 +105,11 @@ export default function StageModal({
   // Estado de contactos
   const [contacts, setContacts] = useState<any[]>([]);
 
+  // Estado para documentos (cuando es tipo 'documentacion')
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [submissions, setSubmissions] = useState<Record<string, any>>({});
+  const [allDocsAccepted, setAllDocsAccepted] = useState(false);
+
   // Estado local de stage - actualizar cuando prop stage cambia
   const [currentStage, setCurrentStage] = useState(stage);
 
@@ -170,6 +175,7 @@ export default function StageModal({
       loadContacts();
       loadMeetingDetails();
       loadLeadLocationData();
+      loadDocuments();
     }
   }, [isOpen, leadId]);
 
@@ -180,6 +186,7 @@ export default function StageModal({
     }
   }, [stage]);
 
+  // Verificar si todos los documentos están aceptados
   const loadAttemptNotes = async () => {
     setLoadingNotes(true);
     try {
@@ -212,6 +219,35 @@ export default function StageModal({
       console.error('Error loading attempt notes:', err);
     } finally {
       setLoadingNotes(false);
+    }
+  };
+
+  const loadDocuments = async () => {
+    try {
+      const { data: docs, error: docsErr } = await supabase
+        .from('lead_documents')
+        .select('*')
+        .eq('lead_id', leadId);
+      if (docsErr) throw docsErr;
+      setDocuments(docs || []);
+
+      const { data: subs, error: subsErr } = await supabase
+        .from('document_submissions')
+        .select('*')
+        .eq('lead_id', leadId)
+        .order('submitted_at', { ascending: false });
+      if (subsErr) throw subsErr;
+
+      const submissionsByDoc: Record<string, any> = {};
+      (subs || []).forEach((sub: any) => {
+        if (!submissionsByDoc[sub.document_id]) {
+          submissionsByDoc[sub.document_id] = [];
+        }
+        submissionsByDoc[sub.document_id].push(sub);
+      });
+      setSubmissions(submissionsByDoc);
+    } catch (err: any) {
+      console.error('Error loading documents:', err);
     }
   };
 
@@ -567,6 +603,8 @@ export default function StageModal({
                   stageNumber={String(currentStage.orden)}
                   stageClave={currentStage.clave}
                   onSuccess={handleSuccess}
+                  onCommentAdded={loadAttemptNotes}
+                  onAllAcceptedChange={setAllDocsAccepted}
                 />
               )}
             </div>
@@ -600,9 +638,19 @@ export default function StageModal({
                   </button>
 
                   <button
-                    disabled={true}
-                    className="flex-1 px-2 py-3 text-sm font-bold rounded-lg flex flex-col items-center justify-center gap-1.5 transition-colors bg-slate-200 text-slate-400 cursor-not-allowed"
-                    title="Todos los documentos deben estar entregados y aceptados"
+                    disabled={!allDocsAccepted || !notes.trim() || notes.trim().length < 10}
+                    className={`flex-1 px-2 py-3 text-sm font-bold rounded-lg flex flex-col items-center justify-center gap-1.5 transition-colors ${
+                      !allDocsAccepted || !notes.trim() || notes.trim().length < 10
+                        ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                        : 'bg-green-600 hover:bg-green-700 text-white'
+                    }`}
+                    title={
+                      !allDocsAccepted
+                        ? 'Todos los documentos deben estar aceptados'
+                        : !notes.trim() || notes.trim().length < 10
+                        ? 'Requiere comentario (mínimo 10 caracteres)'
+                        : ''
+                    }
                   >
                     <Check size={18} />
                     <span>Éxito</span>
