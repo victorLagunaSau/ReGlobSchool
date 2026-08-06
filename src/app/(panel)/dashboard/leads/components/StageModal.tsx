@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Loader2, Info, Building2, FileText, Phone, Mail, MapPin, Plus, AlertCircle } from 'lucide-react';
 import { supabase } from '../../../../../lib/supabase/client';
-import { getStageConfig, getToolsByType } from '../config/stageConfig';
+import { getToolsByType } from '../config/stageConfig';
 import DecisionMakersForm from './DecisionMakersForm';
 
 // Herramientas
@@ -312,7 +312,6 @@ export default function StageModal({
 
   if (!isOpen || !lead || !currentStage) return null;
 
-  const stageConfig = getStageConfig(currentStage.clave);
   const tools = getToolsByType(currentStage.tipo || '');
 
   // Títulos dinámicos según la etapa
@@ -324,24 +323,6 @@ export default function StageModal({
   };
 
   const toolsTitle = stageTitles[currentStage.clave] || 'Herramientas de la Etapa';
-
-  if (!stageConfig) {
-    return (
-      <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold">Error</h2>
-            <button onClick={onClose} className="p-1 hover:bg-slate-100 rounded">
-              <X size={20} />
-            </button>
-          </div>
-          <p className="text-sm text-slate-600">
-            Configuración no encontrada para la etapa: {stage?.clave || 'desconocida'}
-          </p>
-        </div>
-      </div>
-    );
-  }
 
   const handleRegisterCall = async () => {
     if (!selectedPhone) {
@@ -656,7 +637,7 @@ export default function StageModal({
                 </div>
               )}
 
-              {stageConfig.actions === 'calendarize' && (
+              {currentStage.tipo === 'inicial' && (
                 <CalendarizeAction
                   leadId={leadId}
                   startDate={selectedDate}
@@ -676,8 +657,8 @@ export default function StageModal({
                   stageTitle={currentStage.titulo}
                   stageNumber={String(currentStage.orden)}
                   stageClave={currentStage.clave}
-                  nextStageClave={nextStage?.clave || stageConfig.nextStageClave}
-                  nextStageTitle={nextStage?.titulo || stageConfig.nextStageTitle}
+                  nextStageClave={nextStage?.clave}
+                  nextStageTitle={nextStage?.titulo}
                   onSuccess={handleSuccess}
                 />
               )}
@@ -708,7 +689,7 @@ export default function StageModal({
                 </>
               )}
 
-              {stageConfig.actions === 'documentacion' && (
+              {currentStage.tipo === 'documentacion' && (
                 <Documentacion
                   leadId={leadId}
                   lead={lead}
@@ -719,7 +700,7 @@ export default function StageModal({
                 />
               )}
 
-              {stageConfig.actions === 'exito' && (
+              {currentStage.tipo === 'exito' && (
                 <Exito
                   leadId={leadId}
                   lead={lead}
@@ -730,7 +711,7 @@ export default function StageModal({
                 />
               )}
 
-              {stageConfig.actions === 'negociacion' && (
+              {currentStage.tipo === 'negociacion' && (
                 <Negociacion
                   leadId={leadId}
                   lead={lead}
@@ -741,7 +722,7 @@ export default function StageModal({
                 />
               )}
 
-              {!stageConfig.actions && (
+              {!currentStage.tipo && (
                 <p className="text-xs text-slate-400 italic">Sin accionables para esta etapa</p>
               )}
             </div>
