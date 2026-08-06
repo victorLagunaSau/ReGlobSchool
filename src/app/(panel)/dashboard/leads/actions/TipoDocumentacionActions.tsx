@@ -287,42 +287,6 @@ export default function TipoDocumentacionActions({
         </div>
       )}
 
-      {/* Acciones */}
-      <div className="flex gap-2 w-full">
-        <button
-          onClick={() => setShowDeleteConfirm(true)}
-          disabled={!hasNotes}
-          className={`flex-1 px-2 py-3 text-sm font-bold rounded-lg flex flex-col items-center justify-center gap-1.5 transition-colors ${
-            !hasNotes
-              ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
-              : 'bg-red-600 hover:bg-red-700 text-white'
-          }`}
-          title={!hasNotes ? 'Requiere comentario (mínimo 10 caracteres)' : ''}
-        >
-          <Trash2 size={18} />
-          <span>Eliminar</span>
-        </button>
-
-        <button
-          disabled={!allDeliveredAndAccepted || !hasNotes}
-          className={`flex-1 px-2 py-3 text-sm font-bold rounded-lg flex flex-col items-center justify-center gap-1.5 transition-colors ${
-            !allDeliveredAndAccepted || !hasNotes
-              ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
-              : 'bg-green-600 hover:bg-green-700 text-white'
-          }`}
-          title={
-            !allDeliveredAndAccepted
-              ? 'Todos los documentos deben estar entregados y aceptados'
-              : !hasNotes
-              ? 'Requiere comentario (mínimo 10 caracteres)'
-              : ''
-          }
-        >
-          <Check size={18} />
-          <span>Éxito</span>
-        </button>
-      </div>
-
       {/* Delete Confirmation */}
       {showDeleteConfirm && (
         <DeleteAction

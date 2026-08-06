@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, Loader2, Info, Building2, FileText, Phone, Mail, MapPin, Plus, AlertCircle } from 'lucide-react';
+import { X, Loader2, Info, Building2, FileText, Phone, Mail, MapPin, Plus, AlertCircle, Trash2, Check } from 'lucide-react';
 import { supabase } from '../../../../../lib/supabase/client';
 import { getToolsByType } from '../config/stageConfig';
 import DecisionMakersForm from './DecisionMakersForm';
@@ -576,6 +576,39 @@ export default function StageModal({
               <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">
                 Acciones:
               </label>
+
+              {currentStage.tipo === 'documentacion' && (
+                <div className="flex gap-2 w-full">
+                  <button
+                    onClick={() => {
+                      if (!notes.trim() || notes.trim().length < 10) {
+                        alert('Requiere comentario (mínimo 10 caracteres)');
+                        return;
+                      }
+                      // Show delete confirmation modal
+                    }}
+                    disabled={!notes.trim() || notes.trim().length < 10}
+                    className={`flex-1 px-2 py-3 text-sm font-bold rounded-lg flex flex-col items-center justify-center gap-1.5 transition-colors ${
+                      !notes.trim() || notes.trim().length < 10
+                        ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                        : 'bg-red-600 hover:bg-red-700 text-white'
+                    }`}
+                    title={!notes.trim() || notes.trim().length < 10 ? 'Requiere comentario (mínimo 10 caracteres)' : ''}
+                  >
+                    <Trash2 size={18} />
+                    <span>Eliminar</span>
+                  </button>
+
+                  <button
+                    disabled={true}
+                    className="flex-1 px-2 py-3 text-sm font-bold rounded-lg flex flex-col items-center justify-center gap-1.5 transition-colors bg-slate-200 text-slate-400 cursor-not-allowed"
+                    title="Todos los documentos deben estar entregados y aceptados"
+                  >
+                    <Check size={18} />
+                    <span>Éxito</span>
+                  </button>
+                </div>
+              )}
 
               {/* Progreso de Intentos (para todas las etapas tipo contacto) */}
               {currentStage.tipo === 'contacto' && currentStage.limite_pospuestas && (
