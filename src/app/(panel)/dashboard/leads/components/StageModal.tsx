@@ -562,6 +562,7 @@ export default function StageModal({
                 <TipoDocumentacionActions
                   leadId={leadId}
                   notes={notes}
+                  onNotesChange={setNotes}
                   stageTitle={currentStage.titulo}
                   stageNumber={String(currentStage.orden)}
                   stageClave={currentStage.clave}
@@ -681,43 +682,6 @@ export default function StageModal({
               {!currentStage.tipo && (
                 <p className="text-xs text-slate-400 italic">Sin accionables para esta etapa</p>
               )}
-            </div>
-
-            {/* Comentarios de Actividad */}
-            <div className="space-y-3 mt-6">
-              <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">
-                Comentarios de Actividad
-                <span className="text-rose-600 ml-1">*</span>
-              </label>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Describe la actividad realizada... (mínimo 10 caracteres)"
-                maxLength={500}
-                rows={3}
-                className={`w-full px-3 py-2 border rounded-lg text-xs resize-none focus:outline-slate-400 transition-colors ${
-                  notes.length > 0 && notes.length < 10
-                    ? 'border-rose-300 bg-rose-50'
-                    : 'border-slate-300'
-                }`}
-              />
-              <div className="flex items-center justify-between">
-                <p
-                  className={`text-[10px] ${
-                    notes.length < 10 && notes.length > 0
-                      ? 'text-rose-600 font-semibold'
-                      : 'text-slate-600'
-                  }`}
-                >
-                  {notes.length}/500
-                  {notes.length < 10 && notes.length > 0 && (
-                    <span className="ml-1">({10 - notes.length} caracteres mínimos)</span>
-                  )}
-                </p>
-                {notes.length > 0 && notes.length < 10 && (
-                  <span className="text-[9px] text-rose-600 font-semibold">⚠ Mínimo 10 caracteres</span>
-                )}
-              </div>
             </div>
 
             {error && (
