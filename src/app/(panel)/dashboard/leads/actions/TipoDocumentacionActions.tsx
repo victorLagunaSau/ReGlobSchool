@@ -152,6 +152,10 @@ export default function TipoDocumentacionActions({
       const doc = documents.find(d => d.id === docId);
       if (!doc) throw new Error('Documento no encontrado');
 
+      // Obtener sesión
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session?.user?.id) throw new Error('Usuario no autenticado');
+
       // Generar nombre único para el archivo
       const timestamp = Date.now();
       const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
@@ -178,7 +182,7 @@ export default function TipoDocumentacionActions({
           file_url: publicUrl.publicUrl,
           file_path: filePath,
           status: 'pendiente',
-          submitted_by: (await supabase.auth.getUser()).data.user?.id,
+          submitted_by: session.user.id,
         });
 
       if (dbError) throw dbError;
