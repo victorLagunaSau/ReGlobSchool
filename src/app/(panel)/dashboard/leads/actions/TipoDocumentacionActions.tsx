@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Trash2, Plus, AlertCircle, Loader2, Check } from 'lucide-react';
+import { Trash2, Plus, AlertCircle, Loader2, Check, Upload, RefreshCw, X } from 'lucide-react';
 import { supabase } from '../../../../../lib/supabase/client';
 import DeleteAction from './DeleteAction';
 
@@ -10,6 +10,18 @@ interface LeadDocument {
   nombre: string;
   entregado: boolean;
   aceptado_estado: 'pendiente' | 'aceptado' | 'rechazado';
+}
+
+interface DocumentSubmission {
+  id: string;
+  document_id: string;
+  status: 'pendiente' | 'aceptado' | 'rechazado' | 'reenviado';
+  file_url: string;
+  file_path: string;
+  submitted_at: string;
+  accepted_at?: string;
+  rejected_at?: string;
+  resent_at?: string;
 }
 
 interface TipoDocumentacionActionsProps {
@@ -41,15 +53,17 @@ export default function TipoDocumentacionActions({
   onSuccess,
 }: TipoDocumentacionActionsProps) {
   const [documents, setDocuments] = useState<LeadDocument[]>([]);
+  const [submissions, setSubmissions] = useState<Record<string, DocumentSubmission[]>>({});
   const [loading, setLoading] = useState(true);
   const [newDocName, setNewDocName] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isAddingDoc, setIsAddingDoc] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [uploadingDocId, setUploadingDocId] = useState<string | null>(null);
 
-  // Cargar documentos
   useEffect(() => {
     loadDocuments();
+    loadSubmissions();
   }, [leadId]);
 
   const loadDocuments = async () => {
@@ -71,7 +85,146 @@ export default function TipoDocumentacionActions({
     }
   };
 
-  // Agregar documento predefinido
+  const loadSubmissions = async () => {
+    try {
+      const { data, error: err } = await supabase
+        .from('document_submissions')
+        .select('*')
+        .eq('lead_id', leadId)
+        .order('submitted_at', { ascending: false });
+
+      if (err) throw err;
+
+      const submissionsByDoc: Record<string, DocumentSubmission[]> = {};
+      (data || []).forEach((sub: DocumentSubmission) => {
+        if (!submissionsByDoc[sub.document_id]) {
+          submissionsByDoc[sub.document_id] = [];
+        }
+        submissionsByDoc[sub.document_id].push(sub);
+      });
+      setSubmissions(submissionsByDoc);
+    } catch (err: any) {
+      console.error('Error loading submissions:', err);
+    }
+  };
+
+  const generateComment = async (action: string, docName: string) => {
+    const timestamp = new Date().toLocaleDateString('es-ES', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    let commentText = '';
+    if (action === 'uploaded') {
+      commentText = `📄 Documento adjuntado: "${docName}" (${timestamp})`;
+    } else if (action === 'accepted') {
+      commentText = `✅ Documento aceptado: "${docName}" (${timestamp})`;
+    } else if (action === 'rejected') {
+      commentText = `❌ Documento rechazado: "${docName}" (${timestamp})`;
+    } else if (action === 'resent') {
+      commentText = `🔄 Documento reenviado: "${docName}" (${timestamp})`;
+    }
+
+    if (!commentText) return;
+
+    try {
+      await supabase.from('lead_attempt_notes').insert({
+        lead_id: leadId,
+        stage_clave: stageClave,
+        stage_titulo: stageTitle,
+        attempt_number: 1,
+        note_type: 'documento',
+        note_text: commentText,
+      });
+    } catch (err: any) {
+      console.error('Error creating comment:', err);
+    }
+  };
+
+  const handleUploadFile = async (docId: string, file: File) => {
+    if (!file) return;
+
+    setUploadingDocId(docId);
+    try {
+      const doc = documents.find(d => d.id === docId);
+      if (!doc) throw new Error('Documento no encontrado');
+
+      // Generar nombre único para el archivo
+      const timestamp = Date.now();
+      const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const filePath = `${leadId}/${docId}/${timestamp}_${sanitizedName}`;
+
+      // Subir a Storage
+      const { error: uploadError, data } = await supabase.storage
+        .from('lead_docs')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      // Obtener URL pública
+      const { data: publicUrl } = supabase.storage
+        .from('lead_docs')
+        .getPublicUrl(filePath);
+
+      // Guardar en document_submissions
+      const { error: dbError } = await supabase
+        .from('document_submissions')
+        .insert({
+          lead_id: leadId,
+          document_id: docId,
+          file_url: publicUrl.publicUrl,
+          file_path: filePath,
+          status: 'pendiente',
+          submitted_by: (await supabase.auth.getUser()).data.user?.id,
+        });
+
+      if (dbError) throw dbError;
+
+      // Generar comentario
+      await generateComment('uploaded', doc.nombre);
+
+      // Recargar
+      await loadSubmissions();
+    } catch (err: any) {
+      console.error('Error uploading file:', err);
+      alert('Error subiendo archivo: ' + (err?.message || 'Desconocido'));
+    } finally {
+      setUploadingDocId(null);
+    }
+  };
+
+  const updateSubmissionStatus = async (submissionId: string, status: 'aceptado' | 'rechazado' | 'reenviado', docName: string) => {
+    try {
+      const updateData: any = { status };
+
+      if (status === 'aceptado') {
+        updateData.accepted_at = new Date().toISOString();
+      } else if (status === 'rechazado') {
+        updateData.rejected_at = new Date().toISOString();
+      } else if (status === 'reenviado') {
+        updateData.resent_at = new Date().toISOString();
+      }
+
+      const { error: err } = await supabase
+        .from('document_submissions')
+        .update(updateData)
+        .eq('id', submissionId);
+
+      if (err) throw err;
+
+      const actionMap = { aceptado: 'accepted', rechazado: 'rejected', reenviado: 'resent' };
+      await generateComment(actionMap[status], docName);
+
+      await loadSubmissions();
+    } catch (err: any) {
+      console.error('Error updating submission:', err);
+      alert('Error actualizando documento');
+    }
+  };
+
   const handleAddPredefinedDoc = async (docName: string) => {
     if (documents.some(d => d.nombre.toLowerCase() === docName.toLowerCase())) {
       alert(`${docName} ya existe en la lista`);
@@ -101,7 +254,6 @@ export default function TipoDocumentacionActions({
     }
   };
 
-  // Agregar documento nuevo personalizado
   const handleAddCustomDoc = async () => {
     if (!newDocName.trim()) {
       alert('Ingresa el nombre del documento');
@@ -112,7 +264,6 @@ export default function TipoDocumentacionActions({
     setNewDocName('');
   };
 
-  // Actualizar documento
   const handleUpdateDoc = async (docId: string, updates: Partial<LeadDocument>) => {
     try {
       const { error: err } = await supabase
@@ -128,7 +279,6 @@ export default function TipoDocumentacionActions({
     }
   };
 
-  // Verificar si todos los documentos están entregados y aceptados
   const allDeliveredAndAccepted =
     documents.length > 0 &&
     documents.every(d => d.entregado && d.aceptado_estado === 'aceptado');
@@ -160,44 +310,96 @@ export default function TipoDocumentacionActions({
         {documents.length === 0 ? (
           <p className="text-xs text-slate-500 italic">No hay documentos. Agrega uno abajo.</p>
         ) : (
-          <div className="space-y-2">
-            {documents.map(doc => (
-              <div key={doc.id} className="flex items-center gap-2 p-2 bg-white rounded border border-slate-200">
-                <input
-                  type="checkbox"
-                  checked={doc.entregado}
-                  onChange={(e) => handleUpdateDoc(doc.id, { entregado: e.target.checked })}
-                  className="w-4 h-4"
-                />
-                <span className={`flex-1 text-xs font-medium ${doc.entregado ? 'line-through text-slate-400' : 'text-slate-700'}`}>
-                  {doc.nombre}
-                </span>
+          <div className="space-y-3">
+            {documents.map(doc => {
+              const docSubmissions = submissions[doc.id] || [];
+              const latestSubmission = docSubmissions[0];
 
-                {/* Estado de aceptación */}
-                <div className="flex gap-1">
-                  <button
-                    onClick={() => handleUpdateDoc(doc.id, { aceptado_estado: 'aceptado' })}
-                    className={`px-2 py-1 text-xs rounded font-medium transition-colors ${
-                      doc.aceptado_estado === 'aceptado'
-                        ? 'bg-green-100 text-green-700 border border-green-300'
-                        : 'bg-slate-100 text-slate-600 hover:bg-green-50'
-                    }`}
-                  >
-                    ✓ Aceptado
-                  </button>
-                  <button
-                    onClick={() => handleUpdateDoc(doc.id, { aceptado_estado: 'rechazado' })}
-                    className={`px-2 py-1 text-xs rounded font-medium transition-colors ${
-                      doc.aceptado_estado === 'rechazado'
-                        ? 'bg-rose-100 text-rose-700 border border-rose-300'
-                        : 'bg-slate-100 text-slate-600 hover:bg-rose-50'
-                    }`}
-                  >
-                    ✗ Rechazado
-                  </button>
+              return (
+                <div key={doc.id} className="p-3 bg-white rounded border border-slate-200 space-y-2">
+                  {/* Header del documento */}
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={doc.entregado}
+                      onChange={(e) => handleUpdateDoc(doc.id, { entregado: e.target.checked })}
+                      className="w-4 h-4"
+                    />
+                    <span className={`flex-1 text-xs font-medium ${doc.entregado ? 'line-through text-slate-400' : 'text-slate-700'}`}>
+                      {doc.nombre}
+                    </span>
+                  </div>
+
+                  {/* Estado de aceptación */}
+                  {latestSubmission && (
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => updateSubmissionStatus(latestSubmission.id, 'aceptado', doc.nombre)}
+                        className={`px-2 py-1 text-xs rounded font-medium transition-colors ${
+                          latestSubmission.status === 'aceptado'
+                            ? 'bg-green-100 text-green-700 border border-green-300'
+                            : 'bg-slate-100 text-slate-600 hover:bg-green-50'
+                        }`}
+                      >
+                        ✓ Aceptado
+                      </button>
+                      <button
+                        onClick={() => updateSubmissionStatus(latestSubmission.id, 'rechazado', doc.nombre)}
+                        className={`px-2 py-1 text-xs rounded font-medium transition-colors ${
+                          latestSubmission.status === 'rechazado'
+                            ? 'bg-rose-100 text-rose-700 border border-rose-300'
+                            : 'bg-slate-100 text-slate-600 hover:bg-rose-50'
+                        }`}
+                      >
+                        ✗ Rechazado
+                      </button>
+                      <button
+                        onClick={() => updateSubmissionStatus(latestSubmission.id, 'reenviado', doc.nombre)}
+                        className={`px-2 py-1 text-xs rounded font-medium transition-colors ${
+                          latestSubmission.status === 'reenviado'
+                            ? 'bg-blue-100 text-blue-700 border border-blue-300'
+                            : 'bg-slate-100 text-slate-600 hover:bg-blue-50'
+                        }`}
+                      >
+                        🔄 Reenviar
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Upload file */}
+                  <label className="flex items-center gap-2 px-2 py-1.5 text-xs bg-blue-50 border border-blue-200 rounded cursor-pointer hover:bg-blue-100 transition-colors">
+                    <Upload size={12} className="text-blue-600" />
+                    <span className="text-blue-600 font-medium">
+                      {uploadingDocId === doc.id ? 'Subiendo...' : 'Adjuntar archivo'}
+                    </span>
+                    <input
+                      type="file"
+                      hidden
+                      onChange={(e) => {
+                        if (e.target.files?.[0]) {
+                          handleUploadFile(doc.id, e.target.files[0]);
+                        }
+                      }}
+                      disabled={uploadingDocId === doc.id}
+                    />
+                  </label>
+
+                  {/* Historial de submissions */}
+                  {docSubmissions.length > 0 && (
+                    <div className="text-[10px] text-slate-500 space-y-1 pl-2 border-l border-slate-300">
+                      {docSubmissions.map((sub, idx) => (
+                        <div key={sub.id} className="flex justify-between">
+                          <span>
+                            Envío {docSubmissions.length - idx}: <strong>{sub.status}</strong>
+                          </span>
+                          <span>{new Date(sub.submitted_at).toLocaleDateString('es-ES')}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
