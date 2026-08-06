@@ -576,13 +576,6 @@ export default function StageModal({
                 Acciones:
               </label>
 
-              {(!notes.trim() || notes.trim().length < 10) && (
-                <div className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <Info size={14} className="text-blue-600 flex-shrink-0 mt-0.5" />
-                  <p className="text-xs text-blue-700">Para continuar, deja tus comentarios de actividad en la sección siguiente.</p>
-                </div>
-              )}
-
               {/* Progreso de Intentos (para todas las etapas tipo contacto) */}
               {currentStage.tipo === 'contacto' && currentStage.limite_pospuestas && (
                 <div className="space-y-2 mb-4">
