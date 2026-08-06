@@ -24,6 +24,14 @@ const COLUMN_ACCENTS: Record<string, string> = {
   descartado: 'border-t-rose-400',
 };
 
+const TIPO_COLORS: Record<string, string> = {
+  inicial: 'border-t-blue-400',
+  contacto: 'border-t-orange-400',
+  reunion: 'border-t-purple-400',
+  reagendar: 'border-t-pink-400',
+  documentacion: 'border-t-green-400',
+};
+
 const COLUMN_DESCRIPTIONS: Record<string, string> = {
   prospecto: 'Potenciales clientes a los que aún no hemos contactado',
   llamada: 'Clientes con los que hemos establecido contacto inicial',
@@ -39,6 +47,33 @@ const SOURCE_LABELS: Record<string, string> = {
   csv: 'CSV',
 };
 
+const detectSocialMedia = (url: string | null): { type: string; color: string; bgColor: string; label: string } | null => {
+  if (!url) return null;
+
+  const lowerUrl = url.toLowerCase();
+
+  if (lowerUrl.includes('facebook.com')) {
+    return { type: 'facebook', color: 'text-white', bgColor: 'bg-blue-600 hover:bg-blue-700', label: 'Facebook' };
+  }
+  if (lowerUrl.includes('instagram.com')) {
+    return { type: 'instagram', color: 'text-white', bgColor: 'bg-pink-600 hover:bg-pink-700', label: 'Instagram' };
+  }
+  if (lowerUrl.includes('linkedin.com')) {
+    return { type: 'linkedin', color: 'text-white', bgColor: 'bg-blue-700 hover:bg-blue-800', label: 'LinkedIn' };
+  }
+  if (lowerUrl.includes('twitter.com') || lowerUrl.includes('x.com')) {
+    return { type: 'twitter', color: 'text-white', bgColor: 'bg-slate-700 hover:bg-slate-800', label: 'Twitter' };
+  }
+  if (lowerUrl.includes('youtube.com') || lowerUrl.includes('youtu.be')) {
+    return { type: 'youtube', color: 'text-white', bgColor: 'bg-red-600 hover:bg-red-700', label: 'YouTube' };
+  }
+  if (lowerUrl.includes('tiktok.com')) {
+    return { type: 'tiktok', color: 'text-white', bgColor: 'bg-black hover:bg-slate-900', label: 'TikTok' };
+  }
+
+  return null;
+};
+
 export default function LeadsKanban({ leads, states, stages, onRefresh }: LeadsKanbanProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterState, setFilterState] = useState('');
@@ -47,6 +82,7 @@ export default function LeadsKanban({ leads, states, stages, onRefresh }: LeadsK
   const [isStageModalOpen, setIsStageModalOpen] = useState(false);
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [selectedStageType, setSelectedStageType] = useState<string | null>(null);
+  const [collapsedColumns, setCollapsedColumns] = useState<Set<string>>(new Set());
 
   const filteredLeads = useMemo(() => {
     return leads.filter((l) => {
@@ -112,31 +148,33 @@ export default function LeadsKanban({ leads, states, stages, onRefresh }: LeadsK
     onRefresh();
   };
 
+  const toggleColumnCollapse = (columnValue: string) => {
+    const newCollapsed = new Set(collapsedColumns);
+    if (newCollapsed.has(columnValue)) {
+      newCollapsed.delete(columnValue);
+    } else {
+      newCollapsed.add(columnValue);
+    }
+    setCollapsedColumns(newCollapsed);
+  };
+
 
   return (
     <div className="space-y-4 animate-fade-in">
-      <div className="space-y-2">
-        <div className="flex items-center gap-2">
-          <h3 className="text-sm font-bold text-slate-900">Filtros y Búsqueda</h3>
-          <div className="group relative">
-            <Info size={16} className="text-slate-400 cursor-help hover:text-slate-600" />
-            <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block bg-slate-900 text-white text-xs rounded-lg px-3 py-2 whitespace-nowrap z-50">
-              Busca por nombre de negocio o giro comercial, filtra por estado
-            </div>
-          </div>
-        </div>
-        <div className="flex flex-col sm:flex-row gap-3 bg-white p-3 rounded-xl border border-slate-200">
-          <div className="relative flex-1">
+      <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+        <div className="px-4 py-3 flex items-center gap-3">
+          <h3 className="text-lg font-bold text-slate-900 w-[25%]">Pipeline de Leads</h3>
+          <div className="relative w-[40%]">
             <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
             <input
-              className="w-full pl-9 py-2 text-xs border rounded-lg"
+              className="w-full pl-9 py-2 text-xs border border-slate-200 rounded-lg"
               placeholder="Buscar por negocio o giro..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
           <select
-            className="text-xs border rounded-lg px-3 bg-white"
+            className="text-xs border border-slate-200 rounded-lg px-3 bg-white w-[35%]"
             value={filterState}
             onChange={(e) => setFilterState(e.target.value)}
           >
@@ -144,32 +182,53 @@ export default function LeadsKanban({ leads, states, stages, onRefresh }: LeadsK
             {states.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
         </div>
-      </div>
 
-      <div className="flex gap-4 overflow-x-auto pb-4">
-        {columns.map((col) => (
-          <div
-            key={col.value}
-            onDragOver={(e) => { e.preventDefault(); setDragOverStatus(col.value); }}
-            onDragLeave={() => setDragOverStatus((s) => (s === col.value ? null : s))}
-            onDrop={(e) => { e.preventDefault(); handleDrop(col.value); }}
-            className={`shrink-0 w-72 rounded-2xl border-t-4 ${COLUMN_ACCENTS[col.value]} bg-slate-50/60 transition-colors ${dragOverStatus === col.value ? 'bg-blue-50 ring-2 ring-blue-200' : ''}`}
-          >
-            <div className="flex items-center justify-between px-3 py-2.5">
-              <div className="flex items-center gap-1.5 flex-1">
-                <h3 className="text-xs font-black uppercase tracking-wider text-slate-700">{col.label}</h3>
-                <div className="group relative">
-                  <Info size={13} className="text-slate-400 cursor-help hover:text-slate-600 flex-shrink-0" />
-                  <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block bg-slate-900 text-white text-xs rounded-lg px-3 py-2 whitespace-normal z-50 w-48">
-                    {COLUMN_DESCRIPTIONS[col.value] || 'Etapa del pipeline'}
+        <div className="p-3 overflow-x-auto">
+          <div className="flex gap-0">
+        {columns.map((col) => {
+          const isCollapsed = collapsedColumns.has(col.value) || (col.leads.length === 0 && col.leads.length === 0);
+          const shouldShowCollapsed = col.leads.length === 0 || collapsedColumns.has(col.value);
+          const columnStage = stages.find(s => s.clave === col.value);
+          const borderColor = columnStage && columnStage.tipo ? TIPO_COLORS[columnStage.tipo] || COLUMN_ACCENTS[col.value] : COLUMN_ACCENTS[col.value];
+
+          return (
+            <div
+              key={col.value}
+              onDragOver={(e) => { e.preventDefault(); setDragOverStatus(col.value); }}
+              onDragLeave={() => setDragOverStatus((s) => (s === col.value ? null : s))}
+              onDrop={(e) => { e.preventDefault(); handleDrop(col.value); }}
+              className={`shrink-0 ${shouldShowCollapsed ? 'w-12' : 'w-48'} rounded-t-2xl rounded-b-lg border-t-4 ${borderColor} ${
+                columns.indexOf(col) % 2 === 0 ? 'bg-slate-50/60' : 'bg-slate-200/70'
+              } transition-all transition-width ${dragOverStatus === col.value ? 'bg-blue-50 ring-2 ring-blue-200' : ''}`}
+            >
+              {shouldShowCollapsed ? (
+                <button
+                  onClick={() => toggleColumnCollapse(col.value)}
+                  className="w-full h-full flex flex-col items-center justify-start pt-1 p-2 group"
+                  title={col.label}
+                >
+                  <span className="text-[7px] font-bold text-slate-400 text-center leading-tight group-hover:text-slate-600 truncate px-0.5 mt-5">
+                    {col.label.split(' ')[0]}
+                  </span>
+                  {col.leads.length > 0 && (
+                    <span className="text-[8px] font-bold text-slate-400 mt-1 bg-white px-1 py-0.5 rounded-full border border-slate-200">
+                      {col.leads.length}
+                    </span>
+                  )}
+                </button>
+              ) : (
+                <>
+                  <div className={`flex items-center justify-between px-3 py-2.5 rounded-t-xl rounded-b-md ${
+                    columns.indexOf(col) % 2 === 0 ? 'bg-slate-950' : 'bg-slate-800'
+                  }`}>
+                    <div className="flex items-center gap-1.5 flex-1">
+                      <h3 className="text-xs font-black uppercase tracking-wider text-white">{col.label}</h3>
+                    </div>
+                    <span className="text-[15px] font-bold text-white flex-shrink-0">{col.leads.length}</span>
                   </div>
-                </div>
-              </div>
-              <span className="text-[10px] font-bold text-slate-400 bg-white px-2 py-0.5 rounded-full border border-slate-200 flex-shrink-0">{col.leads.length}</span>
-            </div>
 
-            <div className="px-2 pb-2 space-y-2 min-h-[80px]">
-              {col.leads.map((lead) => (
+                  <div className="px-1 pt-2 pb-1 space-y-1 min-h-[80px]">
+                    {col.leads.map((lead) => (
                 <div
                   key={lead.id}
                   draggable={!lead.is_discarded}
@@ -181,34 +240,23 @@ export default function LeadsKanban({ leads, states, stages, onRefresh }: LeadsK
                       : 'border-slate-200 cursor-grab active:cursor-grabbing'
                   } ${draggedId === lead.id ? 'opacity-40' : ''}`}
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 flex items-start gap-1.5">
-                      <Link href={`/dashboard/leads/${lead.id}`} className="font-bold text-slate-900 text-sm hover:text-blue-600 hover:underline leading-tight">
-                        {lead.business_name}
-                      </Link>
-                      <button
-                        disabled
-                        className="p-0.5 text-slate-300 hover:text-slate-300 rounded flex-shrink-0 mt-0.5"
-                        title="Ver detalles"
-                      >
-                        <Maximize2 size={14} />
-                      </button>
+                  <div className="text-center">
+                    <div className="font-bold text-slate-900 text-sm">
+                      {lead.business_name}
                     </div>
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      {lead.is_discarded && (
-                        <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-red-100 text-red-700 uppercase" title="Lead descartado">
-                          Descartado
-                        </span>
-                      )}
-                      {(lead as any).statusReset && (
-                        <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-orange-100 text-orange-700 uppercase" title="Ficha reiniciada a la etapa inicial">
-                          Reiniciada
-                        </span>
-                      )}
-                      <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-black" style={scoreStyle(lead.score_percent)}>
-                        {lead.score_percent.toFixed(0)}%
+                  </div>
+
+                  <div className="flex items-center gap-1 flex-shrink-0 justify-center">
+                    {lead.is_discarded && (
+                      <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-red-100 text-red-700 uppercase" title="Lead descartado">
+                        Descartado
                       </span>
-                    </div>
+                    )}
+                    {(lead as any).statusReset && (
+                      <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-orange-100 text-orange-700 uppercase" title="Ficha reiniciada a la etapa inicial">
+                        Reiniciada
+                      </span>
+                    )}
                   </div>
 
                   <div className="text-[10px] text-slate-500 font-medium">{lead.business_type}</div>
@@ -219,13 +267,54 @@ export default function LeadsKanban({ leads, states, stages, onRefresh }: LeadsK
                     </div>
                   )}
 
-                  <div className="flex items-center justify-between pt-1 border-t border-slate-50">
-                    <div className="flex items-center gap-1.5">
-                      {lead.phone && <Phone size={11} className="text-slate-400" />}
-                      {lead.email && <Mail size={11} className="text-slate-400" />}
-                      {lead.website && <Globe size={11} className="text-slate-400" />}
-                    </div>
-                    <span className="text-[8px] font-bold text-slate-300 uppercase">{SOURCE_LABELS[lead.source] || lead.source}</span>
+                  <div className="flex items-center justify-center gap-1.5 pt-1 border-t border-slate-50">
+                    {lead.phone && (
+                      <a
+                        href={`https://wa.me/${lead.phone.replace(/\D/g, '')}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-1.5 rounded bg-slate-100 hover:bg-slate-200 transition-colors text-green-600 hover:text-green-700"
+                        title="Abrir WhatsApp"
+                      >
+                        <Phone size={11} />
+                      </a>
+                    )}
+                    {lead.email && (
+                      <a
+                        href={`mailto:${lead.email}`}
+                        className="p-1.5 rounded bg-slate-100 hover:bg-slate-200 transition-colors text-blue-600 hover:text-blue-700"
+                        title="Enviar email"
+                      >
+                        <Mail size={11} />
+                      </a>
+                    )}
+                    {lead.website && (() => {
+                      const socialMedia = detectSocialMedia(lead.website);
+                      if (socialMedia) {
+                        return (
+                          <a
+                            href={lead.website.startsWith('http') ? lead.website : `https://${lead.website}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={`p-1.5 rounded transition-colors ${socialMedia.bgColor} ${socialMedia.color}`}
+                            title={`Abrir ${socialMedia.label}`}
+                          >
+                            <Globe size={11} />
+                          </a>
+                        );
+                      }
+                      return (
+                        <a
+                          href={lead.website.startsWith('http') ? lead.website : `https://${lead.website}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-1.5 rounded bg-slate-100 hover:bg-slate-200 transition-colors text-slate-600 hover:text-slate-700"
+                          title="Abrir sitio web"
+                        >
+                          <Globe size={11} />
+                        </a>
+                      );
+                    })()}
                   </div>
 
                   {(() => {
@@ -269,31 +358,51 @@ export default function LeadsKanban({ leads, states, stages, onRefresh }: LeadsK
                     if (!config || !leadStage.tipo) return null;
 
                     return (
-                      <button
-                        onClick={() => {
-                          setSelectedLeadId(lead.id);
-                          setSelectedStageType(leadStage.tipo!);
-                          setIsStageModalOpen(true);
-                        }}
-                        className={`w-full mt-2 flex items-center justify-center gap-1.5 py-1.5 px-2 text-[10px] font-bold text-white ${config.bgColor} rounded-lg transition-colors`}
-                        title={config.title}
-                      >
-                        {config.icon}
-                        {config.label}
-                      </button>
+                      <>
+                        <button
+                          onClick={() => {
+                            setSelectedLeadId(lead.id);
+                            setSelectedStageType(leadStage.tipo!);
+                            setIsStageModalOpen(true);
+                          }}
+                          className={`w-full mt-2 flex items-center justify-center gap-1.5 py-1.5 px-2 text-[10px] font-bold text-white ${config.bgColor} rounded-lg transition-colors`}
+                          title={config.title}
+                        >
+                          {config.icon}
+                          {config.label}
+                        </button>
+                        <div className="flex justify-center mt-2">
+                          <span className="text-[7px] font-bold text-slate-300 uppercase">{SOURCE_LABELS[lead.source] || lead.source}</span>
+                        </div>
+                        <div className="flex justify-center mt-4 pt-3 border-t border-slate-100">
+                          <Link
+                            href={`/dashboard/leads/${lead.id}`}
+                            className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-slate-600 transition-colors"
+                            title="Ver detalles del lead"
+                          >
+                            <Maximize2 size={12} />
+                            <span>Ver detalles</span>
+                          </Link>
+                        </div>
+                      </>
                     );
                   })()}
                 </div>
               ))}
 
-              {col.leads.length === 0 && (
-                <div className="text-center text-[10px] text-slate-300 py-6 border border-dashed border-slate-200 rounded-xl mx-1">
-                  Sin leads aquí
-                </div>
+                    {col.leads.length === 0 && (
+                      <div className="text-center text-[10px] text-slate-300 py-6 border border-dashed border-slate-200 rounded-xl mx-1">
+                        Sin leads aquí
+                      </div>
+                    )}
+                  </div>
+                </>
               )}
             </div>
+          );
+        })}
           </div>
-        ))}
+        </div>
       </div>
 
       {selectedLeadId && (
