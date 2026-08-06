@@ -171,30 +171,31 @@ export default function LeadsConfig({ stages, onRefresh }: LeadsConfigProps) {
 
   return (
     <div className="space-y-8">
-      {/* Header Section */}
-      <div className="bg-gradient-to-r from-slate-50 to-slate-100 rounded-2xl border border-slate-200 p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-bold text-slate-900">Etapas del Pipeline</h2>
-            <p className="text-sm text-slate-600 mt-2">
-              {stages.length} etapa{stages.length !== 1 ? 's' : ''} configurada{stages.length !== 1 ? 's' : ''} • Gestiona los flujos de prospección
-            </p>
-          </div>
-          <button
-            onClick={handleNewStage}
-            className="flex items-center gap-2 px-6 py-3 bg-slate-900 text-white rounded-xl text-sm font-bold hover:bg-slate-800 transition-all shadow-lg hover:shadow-xl"
-          >
-            <Plus size={16} />
-            Nueva Etapa
-          </button>
+      {/* Flow Diagram Section */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+        <div className="mb-6">
+          <h3 className="font-bold text-slate-900 text-lg">Pipeline</h3>
+          <p className="text-sm text-slate-600 mt-1">
+            {stages.length} etapa{stages.length !== 1 ? 's' : ''} configurada{stages.length !== 1 ? 's' : ''} • Gestiona los flujos de prospección
+          </p>
         </div>
+        <PipelineFlowDiagram stages={stages} />
       </div>
 
       {/* Table Section */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
-          <h3 className="font-bold text-slate-900">Configuración de Etapas</h3>
-          <p className="text-xs text-slate-600 mt-1">Vista tabular de todas las etapas y sus parámetros</p>
+        <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+          <div>
+            <h3 className="font-bold text-slate-900">Configuración de Etapas</h3>
+            <p className="text-xs text-slate-600 mt-1">Vista tabular de todas las etapas y sus parámetros</p>
+          </div>
+          <button
+            onClick={handleNewStage}
+            className="flex items-center gap-2 px-6 py-3 bg-slate-900 text-white rounded-xl text-sm font-bold hover:bg-slate-800 transition-all shadow-lg hover:shadow-xl whitespace-nowrap"
+          >
+            <Plus size={16} />
+            Nueva Etapa
+          </button>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -297,15 +298,6 @@ export default function LeadsConfig({ stages, onRefresh }: LeadsConfigProps) {
             </tbody>
           </table>
         </div>
-      </div>
-
-      {/* Flow Diagram Section */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-        <div className="mb-6">
-          <h3 className="font-bold text-slate-900 text-lg">Flujo del Pipeline</h3>
-          <p className="text-sm text-slate-600 mt-1">Visualización de los caminos de éxito y fracaso en cada etapa</p>
-        </div>
-        <PipelineFlowDiagram stages={stages} />
       </div>
 
       <ModalPipelineStage
