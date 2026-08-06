@@ -18,6 +18,7 @@ import CalendarizeAction from '../actions/CalendarizeAction';
 import ContactAttemptAction from '../actions/ContactAttemptAction';
 import TipoContactoActions from '../actions/TipoContactoActions';
 import TipoReunionActions from '../actions/TipoReunionActions';
+import TipoDocumentacionActions from '../actions/TipoDocumentacionActions';
 import Reunion from './Reunion';
 import Documentacion from './Documentacion';
 import Exito from './Exito';
@@ -690,13 +691,13 @@ export default function StageModal({
               )}
 
               {currentStage.tipo === 'documentacion' && (
-                <Documentacion
+                <TipoDocumentacionActions
                   leadId={leadId}
-                  lead={lead}
-                  stage={currentStage}
                   notes={notes}
+                  stageTitle={currentStage.titulo}
+                  stageNumber={String(currentStage.orden)}
+                  stageClave={currentStage.clave}
                   onSuccess={handleSuccess}
-                  onCancel={onClose}
                 />
               )}
 
