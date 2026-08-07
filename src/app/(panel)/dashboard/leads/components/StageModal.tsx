@@ -532,93 +532,95 @@ export default function StageModal({
             </div>
 
             {/* Herramientas Dinámicas */}
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
+            <div className="border border-slate-200 rounded-lg p-5 bg-slate-50 space-y-5">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-200">
                 <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide">
                   {toolsTitle}
                 </h3>
                 {tools.includes('contact-channel') && (
                   <button
                     onClick={() => setShowAddContactModal(true)}
-                    className="flex items-center gap-1 px-3 py-1 text-xs font-bold text-slate-700 hover:bg-slate-100 rounded transition-colors"
+                    className="flex items-center gap-1 px-3 py-1 text-xs font-bold text-slate-700 hover:bg-slate-200 rounded transition-colors"
                   >
                     <Plus size={14} /> Agregar Contacto
                   </button>
                 )}
               </div>
 
-              {tools.includes('calendar') && (
-                <CalendarTool value={selectedDate} onChange={setSelectedDate} />
-              )}
+              <div className="space-y-5">
+                {tools.includes('calendar') && (
+                  <CalendarTool value={selectedDate} onChange={setSelectedDate} />
+                )}
 
-              {tools.includes('contact-channel') && (
-                <ContactChannelSelector
-                  leadId={leadId}
-                  selectedPhone={selectedPhone}
-                  selectedEmail={selectedEmail}
-                  onPhoneSelect={(phone, name) => {
-                    setSelectedPhone(phone);
-                    setSelectedPhoneName(name);
-                  }}
-                  onEmailSelect={(email, name) => {
-                    setSelectedEmail(email);
-                    setSelectedEmailName(name);
-                  }}
-                  phone={lead.phone}
-                  email={lead.email}
-                  onRegisterCall={handleRegisterCall}
-                  onRegisterEmail={handleRegisterEmail}
-                  isRegisteringCall={isRegisteringCall}
-                  isRegisteringEmail={isRegisteringEmail}
-                  refreshKey={contactRefreshKey}
-                />
-              )}
+                {tools.includes('contact-channel') && (
+                  <ContactChannelSelector
+                    leadId={leadId}
+                    selectedPhone={selectedPhone}
+                    selectedEmail={selectedEmail}
+                    onPhoneSelect={(phone, name) => {
+                      setSelectedPhone(phone);
+                      setSelectedPhoneName(name);
+                    }}
+                    onEmailSelect={(email, name) => {
+                      setSelectedEmail(email);
+                      setSelectedEmailName(name);
+                    }}
+                    phone={lead.phone}
+                    email={lead.email}
+                    onRegisterCall={handleRegisterCall}
+                    onRegisterEmail={handleRegisterEmail}
+                    isRegisteringCall={isRegisteringCall}
+                    isRegisteringEmail={isRegisteringEmail}
+                    refreshKey={contactRefreshKey}
+                  />
+                )}
 
-              {currentStage.tipo === 'reunion' && (
-                <ReunionSteps
-                  eventScheduled={eventScheduled}
-                  meetingDetails={meetingDetails}
-                  calendlyComponent={
-                    <GoogleCalendarScheduler
-                      leadId={leadId}
-                      stageId={currentStage?.id || ''}
-                      stageTitulo={currentStage?.titulo || ''}
-                      lead={lead}
-                      onEventScheduled={(data) => {
-                        setEventScheduled(true);
-                        setMeetingDetails({
-                          title: data.event_type,
-                          startTime: data.start_time,
-                          inviteeName: data.invitee_name,
-                          inviteeEmail: data.invitee_email,
-                        });
-                      }}
-                      onError={(err) => setError(err)}
-                    />
-                  }
-                />
-              )}
+                {currentStage.tipo === 'reunion' && (
+                  <ReunionSteps
+                    eventScheduled={eventScheduled}
+                    meetingDetails={meetingDetails}
+                    calendlyComponent={
+                      <GoogleCalendarScheduler
+                        leadId={leadId}
+                        stageId={currentStage?.id || ''}
+                        stageTitulo={currentStage?.titulo || ''}
+                        lead={lead}
+                        onEventScheduled={(data) => {
+                          setEventScheduled(true);
+                          setMeetingDetails({
+                            title: data.event_type,
+                            startTime: data.start_time,
+                            inviteeName: data.invitee_name,
+                            inviteeEmail: data.invitee_email,
+                          });
+                        }}
+                        onError={(err) => setError(err)}
+                      />
+                    }
+                  />
+                )}
 
-              {currentStage.tipo === 'documentacion' && (
-                <TipoDocumentacionActions
-                  leadId={leadId}
-                  notes={notes}
-                  onNotesChange={setNotes}
-                  stageTitle={currentStage.titulo}
-                  stageNumber={String(currentStage.orden)}
-                  stageClave={currentStage.clave}
-                  onSuccess={handleSuccess}
-                  onCommentAdded={loadAttemptNotes}
-                  onAllAcceptedChange={setAllDocsAccepted}
-                />
-              )}
+                {currentStage.tipo === 'documentacion' && (
+                  <TipoDocumentacionActions
+                    leadId={leadId}
+                    notes={notes}
+                    onNotesChange={setNotes}
+                    stageTitle={currentStage.titulo}
+                    stageNumber={String(currentStage.orden)}
+                    stageClave={currentStage.clave}
+                    onSuccess={handleSuccess}
+                    onCommentAdded={loadAttemptNotes}
+                    onAllAcceptedChange={setAllDocsAccepted}
+                  />
+                )}
+              </div>
             </div>
 
             {/* Acciones */}
-            <div className="space-y-3 mt-6">
-              <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">
-                Acciones:
-              </label>
+            <div className="border border-slate-200 rounded-lg p-5 bg-slate-50 space-y-4">
+              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide pb-3 border-b border-slate-200">
+                Acciones
+              </h3>
 
               {currentStage.tipo === 'documentacion' && (
                 <div className="flex gap-2 w-full">
