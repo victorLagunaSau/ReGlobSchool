@@ -142,8 +142,121 @@ export async function deleteLeadArchive({
       if (deleteMeetingsError) throw deleteMeetingsError;
     }
 
-    // 5. Delete from original tables (order matters: FK dependencies)
-    // Delete contacts first (they reference leads)
+    // 5. Archive interactions to deleted_lead_interactions
+    const { data: interactionsData, error: interactionsFetchError } = await supabase
+      .from('lead_interactions')
+      .select('*')
+      .eq('lead_id', leadId);
+
+    if (interactionsFetchError) throw interactionsFetchError;
+
+    if (interactionsData && interactionsData.length > 0) {
+      const interactionsToArchive = interactionsData.map((interaction: any) => ({
+        original_interaction_id: interaction.id,
+        lead_id: interaction.lead_id,
+        interaction_type: interaction.interaction_type,
+        actor_id: interaction.actor_id,
+        action_label: interaction.action_label,
+        message: interaction.message,
+        metadata: interaction.metadata,
+        original_created_at: interaction.created_at,
+        deleted_by: userId,
+        deletion_reason: reason,
+      }));
+
+      const { error: deleteInteractionsError } = await supabase
+        .from('deleted_lead_interactions')
+        .insert(interactionsToArchive);
+
+      if (deleteInteractionsError) throw deleteInteractionsError;
+    }
+
+    // 6. Archive documents to deleted_lead_documents
+    const { data: documentsData, error: documentsFetchError } = await supabase
+      .from('lead_documents')
+      .select('*')
+      .eq('lead_id', leadId);
+
+    if (documentsFetchError) throw documentsFetchError;
+
+    if (documentsData && documentsData.length > 0) {
+      const documentsToArchive = documentsData.map((document: any) => ({
+        original_document_id: document.id,
+        lead_id: document.lead_id,
+        nombre: document.nombre,
+        entregado: document.entregado,
+        aceptado_estado: document.aceptado_estado,
+        original_created_at: document.created_at,
+        deleted_by: userId,
+        deletion_reason: reason,
+      }));
+
+      const { error: deleteDocumentsError } = await supabase
+        .from('deleted_lead_documents')
+        .insert(documentsToArchive);
+
+      if (deleteDocumentsError) throw deleteDocumentsError;
+    }
+
+    // 7. Archive submissions to deleted_document_submissions
+    const { data: submissionsData, error: submissionsFetchError } = await supabase
+      .from('document_submissions')
+      .select('*')
+      .eq('lead_id', leadId);
+
+    if (submissionsFetchError) throw submissionsFetchError;
+
+    if (submissionsData && submissionsData.length > 0) {
+      const submissionsToArchive = submissionsData.map((submission: any) => ({
+        original_submission_id: submission.id,
+        lead_id: submission.lead_id,
+        document_id: submission.document_id,
+        status: submission.status,
+        file_url: submission.file_url,
+        file_path: submission.file_path,
+        submitted_at: submission.submitted_at,
+        accepted_at: submission.accepted_at,
+        rejected_at: submission.rejected_at,
+        resent_at: submission.resent_at,
+        original_created_at: submission.created_at,
+        deleted_by: userId,
+        deletion_reason: reason,
+      }));
+
+      const { error: deleteSubmissionsError } = await supabase
+        .from('deleted_document_submissions')
+        .insert(submissionsToArchive);
+
+      if (deleteSubmissionsError) throw deleteSubmissionsError;
+    }
+
+    // 8. Delete from original tables (order matters: FK dependencies)
+
+    // Delete document submissions first
+    const { error: deleteSubmissionsDbError } = await supabase
+      .from('document_submissions')
+      .delete()
+      .eq('lead_id', leadId);
+
+    if (deleteSubmissionsDbError) throw deleteSubmissionsDbError;
+
+    // Delete documents
+    const { error: deleteDocumentsDbError } = await supabase
+      .from('lead_documents')
+      .delete()
+      .eq('lead_id', leadId);
+
+    if (deleteDocumentsDbError) throw deleteDocumentsDbError;
+
+    // Delete interactions
+    const { error: deleteInteractionsDbError } = await supabase
+      .from('lead_interactions')
+      .delete()
+      .eq('lead_id', leadId);
+
+    if (deleteInteractionsDbError) throw deleteInteractionsDbError;
+
+    // Delete contacts (they reference leads)
     const { error: deleteContactsDbError } = await supabase
       .from('lead_contacts')
       .delete()
@@ -167,7 +280,7 @@ export async function deleteLeadArchive({
 
     if (deleteMeetingsDbError) throw deleteMeetingsDbError;
 
-    // Delete lead (last, after dependent data)
+    // Delete lead (last, after all dependent data)
     const { error: deleteLeadDbError } = await supabase
       .from('leads')
       .delete()
