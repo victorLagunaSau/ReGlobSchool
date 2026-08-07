@@ -670,6 +670,9 @@ export default function StageModal({
                 <div className="space-y-2 mb-4">
                   <p className="text-xs text-slate-700">
                     Intentos <span className="font-bold text-slate-900">{currentAttempts} de {currentStage.limite_pospuestas}</span>
+                    {currentStage.intentos_requeridos ? (
+                      <span className="text-slate-600"> (mínimo {currentStage.intentos_requeridos})</span>
+                    ) : null}
                   </p>
                   <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
                     {(() => {
