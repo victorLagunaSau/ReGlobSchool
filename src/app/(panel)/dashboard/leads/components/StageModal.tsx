@@ -47,6 +47,7 @@ interface StageModalProps {
     state_name?: string;
     country_name?: string;
     created_at?: string;
+    current_stage_attempts?: number;
   } | null;
   stage: {
     id: string;
@@ -100,7 +101,7 @@ export default function StageModal({
   // Estado de comentarios anteriores
   const [attemptNotes, setAttemptNotes] = useState<AttemptNote[]>([]);
   const [loadingNotes, setLoadingNotes] = useState(true);
-  const [currentAttempts, setCurrentAttempts] = useState(0);
+  const currentAttempts = lead?.current_stage_attempts ?? 0;
 
   // Estado de contactos
   const [contacts, setContacts] = useState<any[]>([]);
@@ -187,11 +188,11 @@ export default function StageModal({
     }
   }, [stage]);
 
-  // Verificar si todos los documentos están aceptados
+  // Cargar historial de comentarios anteriores
   const loadAttemptNotes = async () => {
     setLoadingNotes(true);
     try {
-      // Cargar notas históricas
+      // Cargar notas históricas (solo para mostrar en panel derecho)
       const { data, error: err } = await supabase
         .from('lead_attempt_notes')
         .select('id, stage_clave, stage_titulo, note_type, note_text, created_at')
@@ -200,22 +201,6 @@ export default function StageModal({
 
       if (err) throw err;
       setAttemptNotes(data || []);
-
-      // Contar intentos de la etapa ACTUAL específicamente
-      if (currentStage) {
-        const { data: stageAttempts, error: attemptErr } = await supabase
-          .from('lead_attempt_notes')
-          .select('attempt_number')
-          .eq('lead_id', leadId)
-          .eq('stage_clave', currentStage.clave)
-          .order('attempt_number', { ascending: false })
-          .limit(1);
-
-        if (attemptErr) throw attemptErr;
-
-        const maxAttemptNumber = stageAttempts?.[0]?.attempt_number || 0;
-        setCurrentAttempts(maxAttemptNumber);
-      }
     } catch (err) {
       console.error('Error loading attempt notes:', err);
     } finally {
