@@ -95,7 +95,7 @@ export default function DeleteAction({
           stage_clave: stageClave,
           stage_titulo: stageTitle,
           attempt_number: currentAttempts,
-          note_type: 'deleted',
+          note_type: 'success',
           note_text: `${stageTitle} - Lead eliminado (Intentos: ${currentAttempts})\n\n${timestamp}`,
         });
 
@@ -109,13 +109,13 @@ export default function DeleteAction({
           stage_clave: stageClave,
           stage_titulo: stageTitle,
           attempt_number: currentAttempts,
-          note_type: 'deleted',
+          note_type: 'success',
           note_text: `${notes.trim()}\n\n${timestamp}`,
         });
 
       if (noteError) throw noteError;
 
-      // 4. Use reusable delete archive function
+      // 4. Archivar y eliminar el lead
       const result = await deleteLeadArchive({
         leadId,
         userId,

@@ -8,6 +8,7 @@ interface GoogleCalendarSchedulerProps {
   leadId: string;
   stageId: string;
   stageTitulo: string;
+  stageClave: string;
   lead: {
     business_name: string;
     email?: string;
@@ -15,16 +16,29 @@ interface GoogleCalendarSchedulerProps {
   } | null;
   onEventScheduled: (eventData: any) => void;
   onError: (error: string) => void;
+  onCommentAdded?: () => void;
 }
 
 export default function GoogleCalendarScheduler({
   leadId,
   stageId,
   stageTitulo,
+  stageClave,
   lead,
   onEventScheduled,
   onError,
+  onCommentAdded,
 }: GoogleCalendarSchedulerProps) {
+  const formatDateTime = (date: string) => {
+    const d = new Date(date);
+    const months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    const day = d.getDate();
+    const month = months[d.getMonth()];
+    const year = d.getFullYear();
+    const hours = String(d.getHours()).padStart(2, '0');
+    const mins = String(d.getMinutes()).padStart(2, '0');
+    return `${day} ${month} ${year}, ${hours}:${mins}`;
+  };
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -177,9 +191,58 @@ export default function GoogleCalendarScheduler({
       const eventResult = await createEventResponse.json();
       console.log('✅ Evento creado:', eventResult);
 
+      // Crear comentarios automáticos
+      const timestamp = formatDateTime(new Date().toISOString());
+      const meetingDateInfo = new Date(startTime).toLocaleDateString('es-ES', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      });
+
+      // 1. Comentario automático PRIMERO
+      const { error: autoNoteError } = await supabase
+        .from('lead_attempt_notes')
+        .insert({
+          lead_id: leadId,
+          stage_clave: stageClave,
+          stage_titulo: stageTitulo,
+          attempt_number: 1,
+          note_type: 'success',
+          note_text: `${stageTitulo} - Reunión agendada para ${meetingDateInfo}\n\n${timestamp}`,
+        });
+
+      if (autoNoteError) throw autoNoteError;
+
+      // 2. Comentario con datos de la reunión DESPUÉS
+      const { error: noteError } = await supabase
+        .from('lead_attempt_notes')
+        .insert({
+          lead_id: leadId,
+          stage_clave: stageClave,
+          stage_titulo: stageTitulo,
+          attempt_number: 1,
+          note_type: 'success',
+          note_text: `${stageTitulo} - ${lead?.business_name} (${inviteeEmail}, ${inviteePhone}) - ${startTime}\n\n${timestamp}`,
+        });
+
+      if (noteError) throw noteError;
+
+      // 3. Guardar fecha de reunión en day_task del lead
+      const { error: updateError } = await supabase
+        .from('leads')
+        .update({
+          day_task: selectedDate,
+        })
+        .eq('id', leadId);
+
+      if (updateError) throw updateError;
+
       // Marcar como agendado exitosamente
       setScheduled(true);
       setSubmitting(false);
+
+      // Refrescar comentarios
+      onCommentAdded?.();
 
       // Llamar callback para indicar éxito
       onEventScheduled({

@@ -8,6 +8,7 @@ import DeleteAction from './DeleteAction';
 interface TipoReunionActionsProps {
   leadId: string;
   notes: string;
+  onNotesChange: (notes: string) => void;
   stageTitle?: string;
   stageNumber?: string;
   stageClave?: string;
@@ -20,6 +21,8 @@ interface TipoReunionActionsProps {
     titulo: string;
   };
   onSuccess?: (shouldClose?: boolean) => void;
+  onCommentAdded?: () => void;
+  onLeadUpdated?: () => void;
   currentAttempts?: number;
   minAttempts?: number;
   maxAttempts?: number;
@@ -28,12 +31,15 @@ interface TipoReunionActionsProps {
 export default function TipoReunionActions({
   leadId,
   notes,
+  onNotesChange,
   stageTitle = 'Reunión de Demostración',
   stageNumber = '3',
   stageClave = '103',
   failStage,
   successStage,
   onSuccess,
+  onCommentAdded,
+  onLeadUpdated,
   currentAttempts = 0,
   minAttempts = 0,
   maxAttempts = 0,
@@ -42,6 +48,17 @@ export default function TipoReunionActions({
   const [isLoadingReagendar, setIsLoadingReagendar] = useState(false);
   const [isLoadingExito, setIsLoadingExito] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const formatDateTime = (date: string) => {
+    const d = new Date(date);
+    const months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    const day = d.getDate();
+    const month = months[d.getMonth()];
+    const year = d.getFullYear();
+    const hours = String(d.getHours()).padStart(2, '0');
+    const mins = String(d.getMinutes()).padStart(2, '0');
+    return `${day} ${month} ${year}, ${hours}:${mins}`;
+  };
 
   const hasNotes = notes.trim().length >= 10;
   const canDelete = hasNotes;
@@ -69,10 +86,23 @@ export default function TipoReunionActions({
     setError(null);
 
     try {
-      const now = new Date();
-      const autoCompletedNotes = `${notes}\n\n${stageTitle} (Etapa ${stageNumber})\nReagendar → ${failStage.titulo}\nFecha: ${now.toLocaleDateString('es-ES')}`;
+      const timestamp = formatDateTime(new Date().toISOString().split('T')[0]);
 
-      // 1. Guardar nota
+      // 1. Guardar comentario automático PRIMERO
+      const { error: autoNoteError } = await supabase
+        .from('lead_attempt_notes')
+        .insert({
+          lead_id: leadId,
+          stage_clave: stageClave,
+          stage_titulo: stageTitle,
+          attempt_number: 1,
+          note_type: 'success',
+          note_text: `${stageTitle} - Reagendada a ${failStage.titulo}\n\n${timestamp}`,
+        });
+
+      if (autoNoteError) throw autoNoteError;
+
+      // 2. Guardar comentario del usuario DESPUÉS
       const { error: noteError } = await supabase
         .from('lead_attempt_notes')
         .insert({
@@ -80,13 +110,13 @@ export default function TipoReunionActions({
           stage_clave: stageClave,
           stage_titulo: stageTitle,
           attempt_number: 1,
-          note_type: 'retry',
-          note_text: autoCompletedNotes,
+          note_type: 'success',
+          note_text: `${notes.trim()}\n\n${timestamp}`,
         });
 
       if (noteError) throw noteError;
 
-      // 2. Cambiar el lead a la etapa de falla
+      // 3. Cambiar el lead a la etapa de falla
       const { error: updateError } = await supabase
         .from('leads')
         .update({
@@ -97,7 +127,7 @@ export default function TipoReunionActions({
 
       if (updateError) throw updateError;
 
-      // 3. Registrar interacción
+      // 4. Registrar interacción
       const { error: interactionError } = await supabase
         .from('lead_interactions')
         .insert({
@@ -105,7 +135,7 @@ export default function TipoReunionActions({
           interaction_type: 'stage_regress',
           actor_id: (await supabase.auth.getUser()).data.user?.id,
           action_label: `Reagendar a ${failStage.titulo}`,
-          message: `Lead regresó de ${stageTitle} a ${failStage.titulo}`,
+          message: `Lead regresó de ${stageTitle} a ${failStage.titulo}: ${notes.trim()}`,
           metadata: {
             from_stage: stageClave,
             to_stage: failStage.clave,
@@ -113,6 +143,10 @@ export default function TipoReunionActions({
         });
 
       if (interactionError) throw interactionError;
+
+      // 5. Refrescar comentarios y lead
+      onCommentAdded?.();
+      onLeadUpdated?.();
 
       onSuccess?.(true);
     } catch (err: any) {
@@ -138,10 +172,23 @@ export default function TipoReunionActions({
     setError(null);
 
     try {
-      const now = new Date();
-      const autoCompletedNotes = `${notes}\n\n${stageTitle} (Etapa ${stageNumber})\nAvanzar a: ${successStage.titulo}\nFecha: ${now.toLocaleDateString('es-ES')}`;
+      const timestamp = formatDateTime(new Date().toISOString().split('T')[0]);
 
-      // 1. Guardar nota
+      // 1. Guardar comentario automático PRIMERO
+      const { error: autoNoteError } = await supabase
+        .from('lead_attempt_notes')
+        .insert({
+          lead_id: leadId,
+          stage_clave: stageClave,
+          stage_titulo: stageTitle,
+          attempt_number: 1,
+          note_type: 'success',
+          note_text: `${stageTitle} completada - Avanzar a ${successStage.titulo}\n\n${timestamp}`,
+        });
+
+      if (autoNoteError) throw autoNoteError;
+
+      // 2. Guardar comentario del usuario DESPUÉS
       const { error: noteError } = await supabase
         .from('lead_attempt_notes')
         .insert({
@@ -150,12 +197,12 @@ export default function TipoReunionActions({
           stage_titulo: stageTitle,
           attempt_number: 1,
           note_type: 'success',
-          note_text: autoCompletedNotes,
+          note_text: `${notes.trim()}\n\n${timestamp}`,
         });
 
       if (noteError) throw noteError;
 
-      // 2. Cambiar lead a siguiente etapa
+      // 3. Cambiar lead a siguiente etapa
       const { error: updateError } = await supabase
         .from('leads')
         .update({
@@ -166,7 +213,7 @@ export default function TipoReunionActions({
 
       if (updateError) throw updateError;
 
-      // 3. Registrar interacción
+      // 4. Registrar interacción
       const { error: interactionError } = await supabase
         .from('lead_interactions')
         .insert({
@@ -174,7 +221,7 @@ export default function TipoReunionActions({
           interaction_type: 'stage_advance',
           actor_id: (await supabase.auth.getUser()).data.user?.id,
           action_label: `Avance a ${successStage.titulo}`,
-          message: `Lead avanzó de ${stageTitle} a ${successStage.titulo}`,
+          message: `Lead avanzó de ${stageTitle} a ${successStage.titulo}: ${notes.trim()}`,
           metadata: {
             from_stage: stageClave,
             to_stage: successStage.clave,
@@ -182,6 +229,10 @@ export default function TipoReunionActions({
         });
 
       if (interactionError) throw interactionError;
+
+      // 5. Refrescar comentarios y lead
+      onCommentAdded?.();
+      onLeadUpdated?.();
 
       onSuccess?.(false);
     } catch (err: any) {
@@ -193,7 +244,27 @@ export default function TipoReunionActions({
   };
 
   return (
-    <div className="space-y-3 mb-4">
+    <div className="space-y-4 mb-4">
+      {/* COMENTARIOS DE ACTIVIDAD */}
+      <div className="bg-green-50 border border-green-200 rounded-lg p-4 space-y-3">
+        <h3 className="text-sm font-bold text-green-900 uppercase tracking-wide">Comentarios de Actividad *</h3>
+
+        <textarea
+          value={notes}
+          onChange={(e) => onNotesChange(e.target.value)}
+          placeholder="Describe lo que sucedió, observaciones, etc..."
+          maxLength={500}
+          rows={3}
+          className="w-full px-3 py-2 border border-green-200 rounded-lg text-xs resize-none focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
+        />
+        <div className="flex justify-between items-center">
+          <p className="text-[10px] text-slate-600">{notes.length}/500 caracteres</p>
+          <p className={`text-[10px] font-bold ${notes.trim().length >= 10 ? 'text-green-600' : 'text-rose-600'}`}>
+            {notes.trim().length >= 10 ? 'Listo' : 'Minimo 10 caracteres'}
+          </p>
+        </div>
+      </div>
+
       {error && (
         <div className="flex items-start gap-2 p-3 bg-rose-50 border border-rose-200 rounded-lg">
           <AlertCircle size={14} className="text-rose-500 flex-shrink-0 mt-0.5" />

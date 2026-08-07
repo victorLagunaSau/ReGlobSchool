@@ -43,20 +43,17 @@ export default function CalendarizeAction({
     return `${day} ${month} ${year}, ${hours}:${mins}`;
   };
 
-  const generateComment = async (action: string, date: string) => {
-    try {
-      const timestamp = formatDateTime(new Date().toISOString().split('T')[0]);
-      await supabase.from('lead_attempt_notes').insert({
-        lead_id: leadId,
-        stage_clave: '101',
-        stage_titulo: 'Etapa 1 - Inicio de Campaña',
-        attempt_number: 1,
-        note_type: 'attempt',
-        note_text: `Etapa 1 - Inicio de Campaña iniciada\n\n${timestamp}`,
-      });
-    } catch (err: any) {
-      console.error('Error creating comment:', err);
-    }
+  const generateComment = async (stageClave: string, stageTitle: string, date: string) => {
+    const timestamp = formatDateTime(new Date().toISOString().split('T')[0]);
+    const { error } = await supabase.from('lead_attempt_notes').insert({
+      lead_id: leadId,
+      stage_clave: stageClave,
+      stage_titulo: stageTitle,
+      attempt_number: 1,
+      note_type: 'success',
+      note_text: `${stageTitle} - Reunión agendada para ${date}\n\n${timestamp}`,
+    });
+    if (error) throw error;
   };
 
   const handleCalendarize = async () => {
@@ -90,18 +87,18 @@ export default function CalendarizeAction({
       const nextStageClave = nextStageData?.clave;
 
       // Generar comentario automático PRIMERO
-      await generateComment('calendarized', startDate);
+      await generateComment(stage.clave, stage.titulo, startDate);
 
-      // Guardar nota de intento del usuario DESPUÉS
+      // Guardar nota del usuario DESPUÉS
       const timestamp = formatDateTime(new Date().toISOString().split('T')[0]);
       const { error: noteError } = await supabase
         .from('lead_attempt_notes')
         .insert({
           lead_id: leadId,
-          stage_clave: '101',
-          stage_titulo: 'Etapa 1 - Inicio de Campaña',
+          stage_clave: stage.clave,
+          stage_titulo: stage.titulo,
           attempt_number: 1,
-          note_type: 'attempt',
+          note_type: 'success',
           note_text: `${notes.trim()}\n\n${timestamp}`,
         });
 
@@ -144,9 +141,10 @@ export default function CalendarizeAction({
 
       // Actualizar el modal sin cerrar (para mostrar la siguiente etapa)
       onSuccess?.(false);
-    } catch (err) {
-      console.error('Error creating campaign task:', err);
-      setError('Error al iniciar campaña. Intenta de nuevo.');
+    } catch (err: any) {
+      console.error('Error in CalendarizeAction:', err);
+      const errorMsg = err?.message || err?.error_description || JSON.stringify(err);
+      setError(`Error: ${errorMsg}`);
     } finally {
       setIsLoading(false);
     }

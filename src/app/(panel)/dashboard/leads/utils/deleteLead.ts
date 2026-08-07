@@ -230,9 +230,181 @@ export async function deleteLeadArchive({
       if (deleteSubmissionsError) throw deleteSubmissionsError;
     }
 
-    // 8. Delete from original tables (order matters: FK dependencies)
+    // 8. Archive decision makers to deleted_lead_decision_makers
+    const { data: decisionMakersData, error: decisionMakersFetchError } = await supabase
+      .from('lead_decision_makers')
+      .select('*')
+      .eq('lead_id', leadId);
 
-    // Delete document submissions first
+    if (decisionMakersFetchError) throw decisionMakersFetchError;
+
+    if (decisionMakersData && decisionMakersData.length > 0) {
+      const decisionMakersToArchive = decisionMakersData.map((dm: any) => ({
+        original_decision_maker_id: dm.id,
+        original_lead_id: leadId,
+        lead_id: dm.lead_id,
+        nombre: dm.nombre,
+        cargo: dm.cargo,
+        telefono: dm.telefono,
+        email: dm.email,
+        original_created_at: dm.created_at,
+        original_updated_at: dm.updated_at,
+        deleted_by: userId,
+        deletion_reason: reason,
+        metadata: JSON.stringify(dm),
+      }));
+
+      const { error: deleteDecisionMakersError } = await supabase
+        .from('deleted_lead_decision_makers')
+        .insert(decisionMakersToArchive);
+
+      if (deleteDecisionMakersError) throw deleteDecisionMakersError;
+    }
+
+    // 9. Archive tasks to deleted_lead_tasks
+    const { data: tasksData, error: tasksFetchError } = await supabase
+      .from('lead_tasks')
+      .select('*')
+      .eq('lead_id', leadId);
+
+    if (tasksFetchError) throw tasksFetchError;
+
+    if (tasksData && tasksData.length > 0) {
+      const tasksToArchive = tasksData.map((task: any) => ({
+        original_task_id: task.id,
+        original_lead_id: leadId,
+        lead_id: task.lead_id,
+        task_type: task.task_type,
+        description: task.description,
+        scheduled_for: task.scheduled_for,
+        completed_at: task.completed_at,
+        status: task.status,
+        outcome: task.outcome,
+        channel: task.channel,
+        attempt_number: task.attempt_number,
+        modality: task.modality,
+        result: task.result,
+        original_created_at: task.created_at,
+        deleted_by: userId,
+        deletion_reason: reason,
+        metadata: JSON.stringify(task),
+      }));
+
+      const { error: deleteTasksError } = await supabase
+        .from('deleted_lead_tasks')
+        .insert(tasksToArchive);
+
+      if (deleteTasksError) throw deleteTasksError;
+    }
+
+    // 10. Archive score progress to deleted_lead_score_progress
+    const { data: scoreProgressData, error: scoreProgressFetchError } = await supabase
+      .from('lead_score_progress')
+      .select('*')
+      .eq('lead_id', leadId);
+
+    if (scoreProgressFetchError) throw scoreProgressFetchError;
+
+    if (scoreProgressData && scoreProgressData.length > 0) {
+      // Get step details for metadata
+      const { data: stepsData } = await supabase
+        .from('lead_score_steps')
+        .select('*');
+
+      const scoreProgressToArchive = scoreProgressData.map((sp: any) => {
+        const step = stepsData?.find((s: any) => s.id === sp.step_id);
+        return {
+          original_lead_id: leadId,
+          step_id: sp.step_id,
+          step_label: step?.label,
+          step_stage: step?.stage,
+          step_weight: step?.weight,
+          original_completed_at: sp.completed_at,
+          deleted_by: userId,
+          deletion_reason: reason,
+          metadata: JSON.stringify(sp),
+        };
+      });
+
+      const { error: deleteScoreProgressError } = await supabase
+        .from('deleted_lead_score_progress')
+        .insert(scoreProgressToArchive);
+
+      if (deleteScoreProgressError) throw deleteScoreProgressError;
+    }
+
+    // 11. Archive imports to deleted_lead_imports
+    const { data: importsData, error: importsFetchError } = await supabase
+      .from('lead_imports')
+      .select('*')
+      .eq('lead_id', leadId);
+
+    if (importsFetchError) throw importsFetchError;
+
+    if (importsData && importsData.length > 0) {
+      const importsToArchive = importsData.map((imp: any) => ({
+        original_import_id: imp.id,
+        original_lead_id: leadId,
+        lead_id: imp.lead_id,
+        upload_batch_id: imp.upload_batch_id,
+        business_name: imp.business_name,
+        business_type: imp.business_type,
+        phone: imp.phone,
+        email: imp.email,
+        address: imp.address,
+        municipality_code: imp.municipality_code,
+        status: imp.status,
+        error_message: imp.error_message,
+        zone_id: imp.zone_id,
+        owner_id: imp.owner_id,
+        original_created_at: imp.created_at,
+        deleted_by: userId,
+        deletion_reason: reason,
+        metadata: JSON.stringify(imp),
+      }));
+
+      const { error: deleteImportsError } = await supabase
+        .from('deleted_lead_imports')
+        .insert(importsToArchive);
+
+      if (deleteImportsError) throw deleteImportsError;
+    }
+
+    // 12. Delete from original tables (order matters: FK dependencies)
+
+    // Delete imports first (no FK dependencies)
+    const { error: deleteImportsDbError } = await supabase
+      .from('lead_imports')
+      .delete()
+      .eq('lead_id', leadId);
+
+    if (deleteImportsDbError) throw deleteImportsDbError;
+
+    // Delete score progress
+    const { error: deleteScoreProgressDbError } = await supabase
+      .from('lead_score_progress')
+      .delete()
+      .eq('lead_id', leadId);
+
+    if (deleteScoreProgressDbError) throw deleteScoreProgressDbError;
+
+    // Delete tasks
+    const { error: deleteTasksDbError } = await supabase
+      .from('lead_tasks')
+      .delete()
+      .eq('lead_id', leadId);
+
+    if (deleteTasksDbError) throw deleteTasksDbError;
+
+    // Delete decision makers
+    const { error: deleteDecisionMakersDbError } = await supabase
+      .from('lead_decision_makers')
+      .delete()
+      .eq('lead_id', leadId);
+
+    if (deleteDecisionMakersDbError) throw deleteDecisionMakersDbError;
+
+    // Delete document submissions (references lead_documents)
     const { error: deleteSubmissionsDbError } = await supabase
       .from('document_submissions')
       .delete()
@@ -291,7 +463,23 @@ export async function deleteLeadArchive({
     return { success: true };
   } catch (err: any) {
     console.error('Error in deleteLeadArchive:', err);
-    const errorMsg = err?.message || err?.error_description || JSON.stringify(err);
+    let errorMsg = 'Unknown error occurred';
+
+    if (err?.message) {
+      errorMsg = err.message;
+    } else if (err?.error_description) {
+      errorMsg = err.error_description;
+    } else if (err?.details) {
+      errorMsg = err.details;
+    } else if (err?.hint) {
+      errorMsg = err.hint;
+    } else if (typeof err === 'string') {
+      errorMsg = err;
+    } else {
+      errorMsg = JSON.stringify(err);
+    }
+
+    console.error('Detailed error:', { err, errorMsg });
     return { success: false, error: errorMsg };
   }
 }
