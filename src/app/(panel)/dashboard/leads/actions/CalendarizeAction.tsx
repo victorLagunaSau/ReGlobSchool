@@ -112,7 +112,8 @@ export default function CalendarizeAction({
         .from('leads')
         .update({
           status: nextStageClave,
-          day_task: startDate
+          day_task: startDate,
+          current_stage_attempts: 0,
         })
         .eq('id', leadId);
 
