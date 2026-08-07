@@ -16,6 +16,7 @@ import ReunionSteps from './ReunionSteps';
 // Accionables
 import CalendarizeAction from '../actions/CalendarizeAction';
 import ContactAttemptAction from '../actions/ContactAttemptAction';
+import DeleteAction from '../actions/DeleteAction';
 import TipoContactoActions from '../actions/TipoContactoActions';
 import TipoReunionActions from '../actions/TipoReunionActions';
 import TipoDocumentacionActions from '../actions/TipoDocumentacionActions';
@@ -126,6 +127,9 @@ export default function StageModal({
   // Estado para registrar llamadas/emails
   const [isRegisteringCall, setIsRegisteringCall] = useState(false);
   const [isRegisteringEmail, setIsRegisteringEmail] = useState(false);
+
+  // Estado para DeleteAction en documentación
+  const [showDeleteConfirmDoc, setShowDeleteConfirmDoc] = useState(false);
 
   // Estado para stages destino (obtenidos desde continuar_a_id y regresar_a_id)
   const [failStage, setFailStage] = useState<{ clave: string; titulo: string } | null>(null);
@@ -470,6 +474,111 @@ export default function StageModal({
     }
   };
 
+  const formatDateTime = (date: string) => {
+    const d = new Date(date);
+    const months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    const day = d.getDate();
+    const month = months[d.getMonth()];
+    const year = d.getFullYear();
+    const hours = String(d.getHours()).padStart(2, '0');
+    const mins = String(d.getMinutes()).padStart(2, '0');
+    return `${day} ${month} ${year}, ${hours}:${mins}`;
+  };
+
+  const handleDeleteDocumentacion = () => {
+    if (!notes.trim() || notes.trim().length < 10) {
+      alert('Requiere comentario (mínimo 10 caracteres)');
+      return;
+    }
+    setError(null);
+    setShowDeleteConfirmDoc(!showDeleteConfirmDoc);
+  };
+
+  const handleExitoDocumentacion = async () => {
+    if (!notes.trim() || notes.trim().length < 10) {
+      setError('Requiere comentario (mínimo 10 caracteres)');
+      return;
+    }
+
+    if (!nextStage?.clave || !nextStage?.titulo) {
+      setError('No hay etapa siguiente configurada');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      const timestamp = formatDateTime(new Date().toISOString().split('T')[0]);
+
+      // 1. Guardar comentario automático
+      const { error: autoNoteError } = await supabase
+        .from('lead_attempt_notes')
+        .insert({
+          lead_id: leadId,
+          stage_clave: currentStage.clave,
+          stage_titulo: currentStage.titulo,
+          attempt_number: 1,
+          note_type: 'success',
+          note_text: `${currentStage.titulo} completada - Avanzar a ${nextStage.titulo}\n\n${timestamp}`,
+        });
+
+      if (autoNoteError) throw autoNoteError;
+
+      // 2. Guardar comentario del usuario
+      const { error: noteError } = await supabase
+        .from('lead_attempt_notes')
+        .insert({
+          lead_id: leadId,
+          stage_clave: currentStage.clave,
+          stage_titulo: currentStage.titulo,
+          attempt_number: 1,
+          note_type: 'success',
+          note_text: `${notes.trim()}\n\n${timestamp}`,
+        });
+
+      if (noteError) throw noteError;
+
+      // 3. Actualizar lead
+      const { error: updateError } = await supabase
+        .from('leads')
+        .update({
+          status: nextStage.clave,
+          current_stage_attempts: 0,
+        })
+        .eq('id', leadId);
+
+      if (updateError) throw updateError;
+
+      // 4. Registrar interacción
+      const { error: interactionError } = await supabase
+        .from('lead_interactions')
+        .insert({
+          lead_id: leadId,
+          interaction_type: 'stage_advance',
+          actor_id: (await supabase.auth.getUser()).data.user?.id,
+          action_label: `Avance a ${nextStage.titulo}`,
+          message: `Lead avanzó de ${currentStage.titulo} a ${nextStage.titulo}: ${notes.trim()}`,
+          metadata: {
+            from_stage: currentStage.clave,
+            to_stage: nextStage.clave,
+          },
+        });
+
+      if (interactionError) throw interactionError;
+
+      // 5. Refrescar comentarios
+      await loadAttemptNotes();
+      onSuccess?.();
+    } catch (err: any) {
+      console.error('Error in handleExitoDocumentacion:', err);
+      const errorMsg = err?.message || err?.error_description || JSON.stringify(err);
+      setError(`Error: ${errorMsg}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-xl max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col">
@@ -569,6 +678,7 @@ export default function StageModal({
                         leadId={leadId}
                         stageId={currentStage?.id || ''}
                         stageTitulo={currentStage?.titulo || ''}
+                        stageClave={currentStage?.clave || ''}
                         lead={lead}
                         onEventScheduled={(data) => {
                           setEventScheduled(true);
@@ -580,6 +690,7 @@ export default function StageModal({
                           });
                         }}
                         onError={(err) => setError(err)}
+                        onCommentAdded={loadAttemptNotes}
                       />
                     }
                   />
@@ -593,13 +704,38 @@ export default function StageModal({
                     stageTitle={currentStage.titulo}
                     stageNumber={String(currentStage.orden)}
                     stageClave={currentStage.clave}
+                    nextStageClave={nextStage?.clave}
+                    nextStageTitle={nextStage?.titulo}
                     onSuccess={handleSuccess}
                     onCommentAdded={loadAttemptNotes}
+                    onLeadUpdated={onSuccess}
                     onAllAcceptedChange={setAllDocsAccepted}
                   />
                 )}
               </div>
             </div>
+
+            {/* Comentarios de Actividad - Documentación */}
+            {currentStage.tipo === 'documentacion' && (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4 space-y-3">
+                <h3 className="text-sm font-bold text-green-900 uppercase tracking-wide">Comentarios de Actividad *</h3>
+
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Describe lo que sucedió, observaciones, etc..."
+                  maxLength={500}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-green-200 rounded-lg text-xs resize-none focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
+                />
+                <div className="flex justify-between items-center">
+                  <p className="text-[10px] text-slate-600">{notes.length}/500 caracteres</p>
+                  <p className={`text-[10px] font-bold ${notes.trim().length >= 10 ? 'text-green-600' : 'text-rose-600'}`}>
+                    {notes.trim().length >= 10 ? 'Listo' : 'Minimo 10 caracteres'}
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Acciones */}
             <div className="border border-slate-200 rounded-lg p-5 bg-slate-50 space-y-4">
@@ -607,48 +743,6 @@ export default function StageModal({
                 Acciones
               </h3>
 
-              {currentStage.tipo === 'documentacion' && (
-                <div className="flex gap-2 w-full">
-                  <button
-                    onClick={() => {
-                      if (!notes.trim() || notes.trim().length < 10) {
-                        alert('Requiere comentario (mínimo 10 caracteres)');
-                        return;
-                      }
-                      // Show delete confirmation modal
-                    }}
-                    disabled={!notes.trim() || notes.trim().length < 10}
-                    className={`flex-1 px-2 py-3 text-sm font-bold rounded-lg flex flex-col items-center justify-center gap-1.5 transition-colors ${
-                      !notes.trim() || notes.trim().length < 10
-                        ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                        : 'bg-red-600 hover:bg-red-700 text-white'
-                    }`}
-                    title={!notes.trim() || notes.trim().length < 10 ? 'Requiere comentario (mínimo 10 caracteres)' : ''}
-                  >
-                    <Trash2 size={18} />
-                    <span>Eliminar</span>
-                  </button>
-
-                  <button
-                    disabled={!allDocsAccepted || !notes.trim() || notes.trim().length < 10}
-                    className={`flex-1 px-2 py-3 text-sm font-bold rounded-lg flex flex-col items-center justify-center gap-1.5 transition-colors ${
-                      !allDocsAccepted || !notes.trim() || notes.trim().length < 10
-                        ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                        : 'bg-green-600 hover:bg-green-700 text-white'
-                    }`}
-                    title={
-                      !allDocsAccepted
-                        ? 'Todos los documentos deben estar aceptados'
-                        : !notes.trim() || notes.trim().length < 10
-                        ? 'Requiere comentario (mínimo 10 caracteres)'
-                        : ''
-                    }
-                  >
-                    <Check size={18} />
-                    <span>Éxito</span>
-                  </button>
-                </div>
-              )}
 
               {/* Progreso de Intentos (para todas las etapas tipo contacto) */}
               {currentStage.tipo === 'contacto' && currentStage.limite_pospuestas && (
@@ -726,6 +820,7 @@ export default function StageModal({
                     <TipoReunionActions
                       leadId={leadId}
                       notes={notes}
+                      onNotesChange={setNotes}
                       stageTitle={currentStage.titulo}
                       stageNumber={String(currentStage.orden)}
                       stageClave={currentStage.clave}
@@ -735,6 +830,8 @@ export default function StageModal({
                       minAttempts={currentStage.intentos_requeridos || 0}
                       maxAttempts={currentStage.limite_pospuestas || 0}
                       onSuccess={handleSuccess}
+                      onCommentAdded={loadAttemptNotes}
+                      onLeadUpdated={onSuccess}
                     />
                   )}
                 </>
@@ -760,6 +857,65 @@ export default function StageModal({
                   onSuccess={handleSuccess}
                   onCancel={onClose}
                 />
+              )}
+
+              {currentStage.tipo === 'documentacion' && (
+                <div className="space-y-3">
+                  <div className="flex gap-2 w-full">
+                    <button
+                      onClick={handleDeleteDocumentacion}
+                      disabled={!notes.trim() || notes.trim().length < 10}
+                      className={`flex-1 px-2 py-3 text-sm font-bold rounded-lg flex flex-col items-center justify-center gap-1.5 transition-colors ${
+                        !notes.trim() || notes.trim().length < 10
+                          ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                          : 'bg-red-600 hover:bg-red-700 text-white'
+                      }`}
+                      title={!notes.trim() || notes.trim().length < 10 ? 'Requiere comentario (mínimo 10 caracteres)' : ''}
+                    >
+                      <Trash2 size={18} />
+                      <span>Eliminar</span>
+                    </button>
+
+                    <button
+                      onClick={handleExitoDocumentacion}
+                      disabled={!allDocsAccepted || !notes.trim() || notes.trim().length < 10 || isSubmitting}
+                      className={`flex-1 px-2 py-3 text-sm font-bold rounded-lg flex flex-col items-center justify-center gap-1.5 transition-colors ${
+                        !allDocsAccepted || !notes.trim() || notes.trim().length < 10
+                          ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                          : 'bg-green-600 hover:bg-green-700 text-white disabled:opacity-50 disabled:cursor-not-allowed'
+                      }`}
+                      title={
+                        !allDocsAccepted
+                          ? 'Todos los documentos deben estar aceptados'
+                          : !notes.trim() || notes.trim().length < 10
+                          ? 'Requiere comentario (mínimo 10 caracteres)'
+                          : ''
+                      }
+                    >
+                      {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
+                      <span>Éxito</span>
+                    </button>
+                  </div>
+
+                  {showDeleteConfirmDoc && (
+                    <DeleteAction
+                      leadId={leadId}
+                      stageTitle={currentStage?.titulo || ''}
+                      stageNumber={String(currentStage?.orden) || ''}
+                      stageClave={currentStage?.clave || ''}
+                      notes={notes}
+                      currentAttempts={0}
+                      minAttempts={0}
+                      maxAttempts={0}
+                      onSuccess={() => {
+                        setShowDeleteConfirmDoc(false);
+                        onSuccess?.();
+                        onClose();
+                      }}
+                      onCancel={() => setShowDeleteConfirmDoc(false)}
+                    />
+                  )}
+                </div>
               )}
 
               {!currentStage.tipo && (
