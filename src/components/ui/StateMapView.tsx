@@ -64,7 +64,8 @@ export default function StateMapView({
                 //    irregular o apéndices queda descentrado respecto a su propio rectángulo).
                 const midX = (bounds[0][0] + bounds[1][0]) / 2;
                 const midY = (bounds[0][1] + bounds[1][1]) / 2;
-                const center = rawProjection.invert([midX, midY]) as [number, number];
+                const invertFn = rawProjection!.invert;
+                const center = invertFn?.([midX, midY]) as [number, number];
 
                 // 3. Lienzo con la proporción real del estado (limitada para evitar cajas extremas)
                 //    y escala calculada para que el rectángulo envolvente ocupe ~85% del lienzo.

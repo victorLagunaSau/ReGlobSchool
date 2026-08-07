@@ -12,6 +12,9 @@ interface Integration {
   account_email: string;
   is_active: boolean;
   config: any;
+  tokens: {
+    access_token?: string;
+  };
 }
 
 export default function SettingsPage() {
