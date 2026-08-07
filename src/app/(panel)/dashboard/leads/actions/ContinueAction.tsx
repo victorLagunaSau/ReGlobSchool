@@ -13,6 +13,7 @@ interface ContinueActionProps {
   nextStageTitle: string;
   notes: string;
   onSuccess: (shouldClose?: boolean) => void | Promise<void>;
+  onCommentAdded?: () => void;
   onLeadUpdated?: () => void;
   compact?: boolean;
   currentAttempts?: number;
@@ -30,6 +31,7 @@ export default function ContinueAction({
   nextStageTitle,
   notes,
   onSuccess,
+  onCommentAdded,
   onLeadUpdated,
   compact = false,
   currentAttempts = 0,
@@ -94,7 +96,10 @@ export default function ContinueAction({
 
       if (noteError) throw noteError;
 
-      // 3. Actualizar lead al siguiente stage
+      // 3. Recargar comentarios inmediatamente después de guardar
+      onCommentAdded?.();
+
+      // 4. Actualizar lead al siguiente stage
       const { error: updateError } = await supabase
         .from('leads')
         .update({
@@ -105,7 +110,7 @@ export default function ContinueAction({
 
       if (updateError) throw updateError;
 
-      // 4. Registrar interacción
+      // 5. Registrar interacción
       const { error: interactionError } = await supabase
         .from('lead_interactions')
         .insert({
@@ -122,7 +127,7 @@ export default function ContinueAction({
 
       if (interactionError) throw interactionError;
 
-      // 5. Recargar datos del lead para actualizar el Kanban
+      // 6. Recargar datos del lead para actualizar el Kanban
       onLeadUpdated?.();
 
       onSuccess(false);

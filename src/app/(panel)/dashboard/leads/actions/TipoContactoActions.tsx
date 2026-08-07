@@ -19,6 +19,7 @@ interface TipoContactoActionsProps {
   nextStageClave?: string;
   nextStageTitle?: string;
   onSuccess?: (shouldClose?: boolean) => void;
+  onCommentAdded?: () => void;
   onLeadUpdated?: () => void;
 }
 
@@ -35,6 +36,7 @@ export default function TipoContactoActions({
   nextStageClave = '103',
   nextStageTitle = 'Reunión de Demostración',
   onSuccess,
+  onCommentAdded,
   onLeadUpdated,
 }: TipoContactoActionsProps) {
   const [showRetryOptions, setShowRetryOptions] = useState(false);
@@ -127,6 +129,7 @@ export default function TipoContactoActions({
           onSuccess={(shouldClose) => {
             onSuccess?.(shouldClose);
           }}
+          onCommentAdded={onCommentAdded}
           onLeadUpdated={onLeadUpdated}
           compact={true}
           currentAttempts={currentAttempts}
@@ -154,6 +157,7 @@ export default function TipoContactoActions({
           onCancel={() => {
             setShowRetryOptions(false);
           }}
+          onCommentAdded={onCommentAdded}
           onLeadUpdated={onLeadUpdated}
         />
       )}

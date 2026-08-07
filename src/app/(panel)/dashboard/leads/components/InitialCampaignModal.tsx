@@ -3,7 +3,6 @@
 import React, { useState, useMemo } from 'react';
 import { X, Loader2, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase } from '../../../../../lib/supabase/client';
-import CalendarizeAction from '../actions/CalendarizeAction';
 
 interface InitialCampaignModalProps {
   isOpen: boolean;
@@ -339,12 +338,14 @@ export default function InitialCampaignModal({
                 Cerrar
               </button>
               <div className="flex-1">
-                <CalendarizeAction
-                  isLoading={isSubmitting}
-                  isDisabled={!startDate || notes.trim().length < 10}
+                <button
                   onClick={handleContinue}
-                  label="Calendarizar"
-                />
+                  disabled={!startDate || notes.trim().length < 10 || isSubmitting}
+                  className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white text-sm font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
+                >
+                  {isSubmitting && <Loader2 size={16} className="animate-spin" />}
+                  Calendarizar
+                </button>
               </div>
             </div>
           </div>

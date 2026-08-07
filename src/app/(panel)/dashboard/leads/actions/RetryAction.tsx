@@ -15,6 +15,7 @@ interface RetryActionProps {
   maxAttempts: number;
   onSuccess: () => void;
   onCancel?: () => void;
+  onCommentAdded?: () => void;
   onLeadUpdated?: () => void;
 }
 
@@ -52,6 +53,7 @@ export default function RetryAction({
   maxAttempts,
   onSuccess,
   onCancel,
+  onCommentAdded,
   onLeadUpdated,
 }: RetryActionProps) {
   const [isLoading, setIsLoading] = useState(false);
@@ -134,7 +136,10 @@ export default function RetryAction({
 
       if (noteError) throw noteError;
 
-      // 3. Incrementar current_stage_attempts y guardar fecha en day_task
+      // 3. Recargar comentarios inmediatamente después de guardar
+      onCommentAdded?.();
+
+      // 4. Incrementar current_stage_attempts y guardar fecha en day_task
       const { error: updateError } = await supabase
         .from('leads')
         .update({
@@ -145,7 +150,7 @@ export default function RetryAction({
 
       if (updateError) throw updateError;
 
-      // 4. Recargar datos del lead para actualizar el Kanban
+      // 5. Recargar datos del lead para actualizar el Kanban
       onLeadUpdated?.();
 
       onSuccess();

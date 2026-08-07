@@ -9,7 +9,7 @@ interface CalendarizeActionProps {
   startDate: string;
   notes: string;
   onNotesChange: (notes: string) => void;
-  onSuccess: () => void;
+  onSuccess: (shouldClose?: boolean) => void;
   onCommentAdded?: () => void;
   onLeadUpdated?: () => void;
   isSubmitting?: boolean;

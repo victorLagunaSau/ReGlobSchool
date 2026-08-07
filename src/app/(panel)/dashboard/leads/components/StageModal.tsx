@@ -804,6 +804,7 @@ export default function StageModal({
                   nextStageClave={nextStage?.clave}
                   nextStageTitle={nextStage?.titulo}
                   onSuccess={handleSuccess}
+                  onCommentAdded={loadAttemptNotes}
                   onLeadUpdated={onSuccess}
                 />
               )}
