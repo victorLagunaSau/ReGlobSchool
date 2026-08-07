@@ -9,6 +9,7 @@ import DeleteAction from './DeleteAction';
 interface TipoContactoActionsProps {
   leadId: string;
   notes: string;
+  onNotesChange?: (notes: string) => void;
   minAttempts?: number;
   maxAttempts?: number;
   currentAttempts?: number;
@@ -18,11 +19,13 @@ interface TipoContactoActionsProps {
   nextStageClave?: string;
   nextStageTitle?: string;
   onSuccess?: (shouldClose?: boolean) => void;
+  onLeadUpdated?: () => void;
 }
 
 export default function TipoContactoActions({
   leadId,
   notes,
+  onNotesChange,
   minAttempts = 0,
   maxAttempts = 0,
   currentAttempts = 0,
@@ -32,6 +35,7 @@ export default function TipoContactoActions({
   nextStageClave = '103',
   nextStageTitle = 'Reunión de Demostración',
   onSuccess,
+  onLeadUpdated,
 }: TipoContactoActionsProps) {
   const [showRetryOptions, setShowRetryOptions] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -58,7 +62,28 @@ export default function TipoContactoActions({
   };
 
   return (
-    <div className="space-y-3 mb-4">
+    <div className="space-y-4 mb-4">
+      {/* Comentarios de Actividad */}
+      <div className="bg-green-50 border border-green-200 rounded-lg p-4 space-y-3">
+        <h3 className="text-sm font-bold text-green-900 uppercase tracking-wide">Comentarios de Actividad *</h3>
+
+        <textarea
+          value={notes}
+          onChange={(e) => onNotesChange?.(e.target.value)}
+          placeholder="Describe lo que sucedió, observaciones, etc..."
+          maxLength={500}
+          rows={3}
+          className="w-full px-3 py-2 border border-green-200 rounded-lg text-xs resize-none focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
+        />
+        <div className="flex justify-between items-center">
+          <p className="text-[10px] text-slate-600">{notes.length}/500 caracteres</p>
+          <p className={`text-[10px] font-bold ${notes.trim().length >= 10 ? 'text-green-600' : 'text-rose-600'}`}>
+            {notes.trim().length >= 10 ? 'Listo' : 'Mínimo 10 caracteres'}
+          </p>
+        </div>
+      </div>
+
+      {/* Acciones */}
       <div className="flex gap-2 w-full">
         {/* ELIMINAR - 33% */}
         <button
@@ -102,6 +127,7 @@ export default function TipoContactoActions({
           onSuccess={(shouldClose) => {
             onSuccess?.(shouldClose);
           }}
+          onLeadUpdated={onLeadUpdated}
           compact={true}
           currentAttempts={currentAttempts}
           minAttempts={minAttempts}
@@ -128,6 +154,7 @@ export default function TipoContactoActions({
           onCancel={() => {
             setShowRetryOptions(false);
           }}
+          onLeadUpdated={onLeadUpdated}
         />
       )}
 
@@ -147,6 +174,7 @@ export default function TipoContactoActions({
             onSuccess?.(true);
           }}
           onCancel={() => setShowDeleteConfirm(false)}
+          onLeadUpdated={onLeadUpdated}
         />
       )}
     </div>

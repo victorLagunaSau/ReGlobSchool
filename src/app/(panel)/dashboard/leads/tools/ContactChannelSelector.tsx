@@ -23,6 +23,7 @@ interface ContactChannelSelectorProps {
   onRegisterEmail?: () => void;
   isRegisteringCall?: boolean;
   isRegisteringEmail?: boolean;
+  refreshKey?: number;
 }
 
 export default function ContactChannelSelector({
@@ -37,30 +38,31 @@ export default function ContactChannelSelector({
   onRegisterEmail,
   isRegisteringCall,
   isRegisteringEmail,
+  refreshKey,
 }: ContactChannelSelectorProps) {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const fetchContacts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('lead_contacts')
+        .select('id, nombre, telefono, email')
+        .eq('lead_id', leadId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setContacts(data || []);
+    } catch (err) {
+      console.error('Error loading contacts:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchContacts = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('lead_contacts')
-          .select('id, nombre, telefono, email')
-          .eq('lead_id', leadId)
-          .order('created_at', { ascending: false });
-
-        if (error) throw error;
-        setContacts(data || []);
-      } catch (err) {
-        console.error('Error loading contacts:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     if (leadId) fetchContacts();
-  }, [leadId]);
+  }, [leadId, refreshKey]);
 
   // Filtrar teléfonos y emails
   const phones = [

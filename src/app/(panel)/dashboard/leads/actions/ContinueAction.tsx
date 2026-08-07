@@ -13,6 +13,7 @@ interface ContinueActionProps {
   nextStageTitle: string;
   notes: string;
   onSuccess: (shouldClose?: boolean) => void | Promise<void>;
+  onLeadUpdated?: () => void;
   compact?: boolean;
   currentAttempts?: number;
   minAttempts?: number;
@@ -29,6 +30,7 @@ export default function ContinueAction({
   nextStageTitle,
   notes,
   onSuccess,
+  onLeadUpdated,
   compact = false,
   currentAttempts = 0,
   minAttempts = 0,
@@ -37,6 +39,17 @@ export default function ContinueAction({
 }: ContinueActionProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const formatDateTime = (date: string) => {
+    const d = new Date(date);
+    const months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    const day = d.getDate();
+    const month = months[d.getMonth()];
+    const year = d.getFullYear();
+    const hours = String(d.getHours()).padStart(2, '0');
+    const mins = String(d.getMinutes()).padStart(2, '0');
+    return `${day} ${month} ${year}, ${hours}:${mins}`;
+  };
 
   const hasNotes = notes.trim().length >= 10;
   const hasReachedMaxAttempts = currentAttempts >= maxAttempts && maxAttempts > 0;
@@ -51,10 +64,23 @@ export default function ContinueAction({
     setError(null);
 
     try {
-      // 1. Guardar nota de transición
-      const now = new Date();
-      const autoCompletedNotes = `${notes}\n\n${stageTitle} (Etapa ${stageNumber})\nAvanzar a: ${nextStageTitle}\nFecha: ${now.toLocaleDateString('es-ES')}`;
+      const timestamp = formatDateTime(new Date().toISOString().split('T')[0]);
 
+      // 1. Guardar comentario automático PRIMERO
+      const { error: autoNoteError } = await supabase
+        .from('lead_attempt_notes')
+        .insert({
+          lead_id: leadId,
+          stage_clave: stageClave,
+          stage_titulo: stageTitle,
+          attempt_number: 1,
+          note_type: 'success',
+          note_text: `${stageTitle} completada - Avanzar a ${nextStageTitle}\n\n${timestamp}`,
+        });
+
+      if (autoNoteError) throw autoNoteError;
+
+      // 2. Guardar comentario del usuario DESPUÉS
       const { error: noteError } = await supabase
         .from('lead_attempt_notes')
         .insert({
@@ -63,23 +89,23 @@ export default function ContinueAction({
           stage_titulo: stageTitle,
           attempt_number: 1,
           note_type: 'success',
-          note_text: autoCompletedNotes,
+          note_text: `${notes.trim()}\n\n${timestamp}`,
         });
 
       if (noteError) throw noteError;
 
-      // 2. Actualizar lead al siguiente stage
+      // 3. Actualizar lead al siguiente stage
       const { error: updateError } = await supabase
         .from('leads')
         .update({
           status: nextStageClave,
-          current_stage_attempts: 0, // Reset contador para nueva etapa
+          current_stage_attempts: 0,
         })
         .eq('id', leadId);
 
       if (updateError) throw updateError;
 
-      // 3. Registrar interacción
+      // 4. Registrar interacción
       const { error: interactionError } = await supabase
         .from('lead_interactions')
         .insert({
@@ -87,7 +113,7 @@ export default function ContinueAction({
           interaction_type: 'stage_advance',
           actor_id: (await supabase.auth.getUser()).data.user?.id,
           action_label: `Avance a ${nextStageTitle}`,
-          message: `Lead avanzó de ${stageTitle} a ${nextStageTitle}`,
+          message: `Lead avanzó de ${stageTitle} a ${nextStageTitle}: ${notes.trim()}`,
           metadata: {
             from_stage: stageClave,
             to_stage: nextStageClave,
@@ -96,7 +122,10 @@ export default function ContinueAction({
 
       if (interactionError) throw interactionError;
 
-      onSuccess(false); // Pasar false para NO cerrar el modal, permitiendo agendar siguiente paso
+      // 5. Recargar datos del lead para actualizar el Kanban
+      onLeadUpdated?.();
+
+      onSuccess(false);
     } catch (err: any) {
       console.error('Error continuing to next stage:', err);
       const errorMsg = err?.message || err?.error_description || JSON.stringify(err);

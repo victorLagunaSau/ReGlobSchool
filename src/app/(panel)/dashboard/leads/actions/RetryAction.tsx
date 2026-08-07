@@ -15,6 +15,7 @@ interface RetryActionProps {
   maxAttempts: number;
   onSuccess: () => void;
   onCancel?: () => void;
+  onLeadUpdated?: () => void;
 }
 
 // Calcula días hábiles (excluyendo fines de semana)
@@ -51,12 +52,24 @@ export default function RetryAction({
   maxAttempts,
   onSuccess,
   onCancel,
+  onLeadUpdated,
 }: RetryActionProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
   const hasNotes = notes.trim().length >= 10;
+
+  const formatDateTime = (date: string) => {
+    const d = new Date(date);
+    const months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    const day = d.getDate();
+    const month = months[d.getMonth()];
+    const year = d.getFullYear();
+    const hours = String(d.getHours()).padStart(2, '0');
+    const mins = String(d.getMinutes()).padStart(2, '0');
+    return `${day} ${month} ${year}, ${hours}:${mins}`;
+  };
 
   // Calcular fecha legible en español
   const formatDateLong = (date: Date) => {
@@ -65,31 +78,49 @@ export default function RetryAction({
     return `${days[date.getDay()]} ${date.getDate()} de ${months[date.getMonth()]} del ${date.getFullYear()}`;
   };
 
-  const handleRetrySelect = async (days: number) => {
+  const handleRetrySelect = (days: number) => {
     if (!hasNotes) {
       alert('Requiere comentario (mínimo 10 caracteres)');
       return;
     }
 
-    // Calcular fecha primero (sin iniciar loading)
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const retryDate = addBusinessDays(tomorrow, days - 1); // -1 porque ya sumamos 1 día para mañana
+    // Calcular fecha DESDE HOY (no desde fecha anterior)
+    // Usar fecha sin hora para evitar problemas de zona horaria
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const retryDate = addBusinessDays(today, days);
     setSelectedDate(retryDate);
+  };
+
+  const handleAccept = async () => {
+    if (!selectedDate) {
+      setError('Selecciona una fecha primero');
+      return;
+    }
 
     setIsLoading(true);
     setError(null);
 
     try {
-
-      // Obtener el próximo número de intento
       const nextAttemptNumber = currentAttempts + 1;
+      const timestamp = formatDateTime(new Date().toISOString().split('T')[0]);
+      const retryDateFormatted = selectedDate.toLocaleDateString('es-ES');
 
-      // Auto-completar comentario con: título, número de etapa, fecha, número de intento
-      const retryDateFormatted = retryDate.toLocaleDateString('es-ES');
-      const autoCompletedNotes = `${notes}\n\n${stageTitle} (Etapa ${stageNumber})\nReintentar: ${retryDateFormatted}\nIntento: ${nextAttemptNumber}`;
+      // 1. Guardar comentario automático PRIMERO
+      const { error: autoNoteError } = await supabase
+        .from('lead_attempt_notes')
+        .insert({
+          lead_id: leadId,
+          stage_clave: stageClave,
+          stage_titulo: stageTitle,
+          attempt_number: nextAttemptNumber,
+          note_type: 'retry',
+          note_text: `${stageTitle} - Reintentar programado para ${retryDateFormatted}\n\n${timestamp}`,
+        });
 
-      // 1. Guardar nota de intento
+      if (autoNoteError) throw autoNoteError;
+
+      // 2. Guardar comentario del usuario DESPUÉS
       const { error: noteError } = await supabase
         .from('lead_attempt_notes')
         .insert({
@@ -98,37 +129,29 @@ export default function RetryAction({
           stage_titulo: stageTitle,
           attempt_number: nextAttemptNumber,
           note_type: 'retry',
-          note_text: autoCompletedNotes,
+          note_text: `${notes.trim()}\n\n${timestamp}`,
         });
 
       if (noteError) throw noteError;
 
-      // 2. Incrementar current_stage_attempts
+      // 3. Incrementar current_stage_attempts y guardar fecha en day_task
       const { error: updateError } = await supabase
         .from('leads')
-        .update({ current_stage_attempts: nextAttemptNumber })
+        .update({
+          current_stage_attempts: nextAttemptNumber,
+          day_task: selectedDate.toISOString().split('T')[0]
+        })
         .eq('id', leadId);
 
       if (updateError) throw updateError;
 
-      // 3. Crear tarea programada para la fecha de reintentar
-      const { error: taskError } = await supabase
-        .from('lead_tasks')
-        .insert({
-          lead_id: leadId,
-          task_type: 'seguimiento',
-          description: `Reintentar contacto - ${stageTitle}`,
-          scheduled_for: retryDate.toISOString(),
-          status: 'pendiente',
-        });
-
-      if (taskError) throw taskError;
+      // 4. Recargar datos del lead para actualizar el Kanban
+      onLeadUpdated?.();
 
       onSuccess();
     } catch (err: any) {
       console.error('Error scheduling retry:', err);
       const errorMsg = err?.message || err?.error_description || JSON.stringify(err);
-      console.error('Error details:', errorMsg);
       setError(`Error: ${errorMsg}`);
     } finally {
       setIsLoading(false);
@@ -144,39 +167,63 @@ export default function RetryAction({
         </div>
       )}
 
+      <p className="text-xs font-semibold text-amber-900 mb-2">
+        Selecciona cuándo reintentar:
+      </p>
+
+      <div className="grid grid-cols-4 gap-2 mb-4">
+        {RETRY_OPTIONS.map((option) => {
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const calculatedDate = addBusinessDays(today, option.days);
+          const isSelected = selectedDate && selectedDate.toDateString() === calculatedDate.toDateString();
+          return (
+            <button
+              key={option.days}
+              onClick={() => handleRetrySelect(option.days)}
+              disabled={isLoading}
+              className={`px-2 py-2.5 text-xs font-bold rounded-lg transition-colors flex flex-col items-center justify-center gap-1 ${
+                isSelected
+                  ? 'bg-amber-700 text-white'
+                  : 'bg-amber-600 hover:bg-amber-700 text-white disabled:opacity-50 disabled:cursor-not-allowed'
+              }`}
+            >
+              <Calendar size={12} />
+              <span>{option.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
       {selectedDate && (
-        <div className="p-3 bg-white border border-amber-300 rounded-lg">
-          <p className="text-xs text-amber-900 font-semibold">
-            Fecha seleccionada: <span className="text-amber-700">{formatDateLong(selectedDate)}</span>
+        <div className="p-3 bg-blue-50 border border-blue-300 rounded-lg mb-4">
+          <p className="text-xs text-blue-900 font-semibold">
+            Reintentar el: <span className="text-blue-700 font-bold">{formatDateLong(selectedDate)}</span>
           </p>
         </div>
       )}
 
-      <p className="text-xs font-semibold text-amber-900 mb-3">
-        Selecciona cuándo reintentar:
-      </p>
-
-      <div className="grid grid-cols-4 gap-2 mb-3">
-        {RETRY_OPTIONS.map((option) => (
-          <button
-            key={option.days}
-            onClick={() => handleRetrySelect(option.days)}
-            disabled={isLoading}
-            className="px-2 py-2.5 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 transition-colors rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1"
-          >
-            {isLoading && <Loader2 size={12} className="animate-spin" />}
-            <Calendar size={12} />
-            <span>{option.label}</span>
-          </button>
-        ))}
+      <div className="flex gap-2">
+        <button
+          onClick={() => onCancel?.()}
+          className="flex-1 px-3 py-2 text-xs font-bold text-slate-700 bg-slate-200 hover:bg-slate-300 transition-colors rounded-lg disabled:opacity-50"
+          disabled={isLoading}
+        >
+          Cancelar
+        </button>
+        <button
+          onClick={handleAccept}
+          disabled={!selectedDate || isLoading}
+          className={`flex-1 px-3 py-2 text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-2 ${
+            !selectedDate || isLoading
+              ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+              : 'bg-green-600 hover:bg-green-700 text-white'
+          }`}
+        >
+          {isLoading && <Loader2 size={12} className="animate-spin" />}
+          Aceptar
+        </button>
       </div>
-
-      <button
-        onClick={() => onCancel?.()}
-        className="w-full px-3 py-2 text-xs font-bold text-slate-700 bg-slate-200 hover:bg-slate-300 transition-colors rounded-lg"
-      >
-        Cancelar
-      </button>
     </div>
   );
 }

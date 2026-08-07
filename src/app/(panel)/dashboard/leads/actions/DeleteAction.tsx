@@ -16,6 +16,7 @@ interface DeleteActionProps {
   maxAttempts: number;
   onSuccess: () => void;
   onCancel?: () => void;
+  onLeadUpdated?: () => void;
 }
 
 export default function DeleteAction({
@@ -29,10 +30,22 @@ export default function DeleteAction({
   maxAttempts,
   onSuccess,
   onCancel,
+  onLeadUpdated,
 }: DeleteActionProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(8);
+
+  const formatDateTime = (date: string) => {
+    const d = new Date(date);
+    const months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    const day = d.getDate();
+    const month = months[d.getMonth()];
+    const year = d.getFullYear();
+    const hours = String(d.getHours()).padStart(2, '0');
+    const mins = String(d.getMinutes()).padStart(2, '0');
+    return `${day} ${month} ${year}, ${hours}:${mins}`;
+  };
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -67,32 +80,58 @@ export default function DeleteAction({
     setError(null);
 
     try {
-      const now = new Date();
-      const timeStr = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      const dateStr = now.toLocaleDateString('es-ES');
+      const timestamp = formatDateTime(new Date().toISOString().split('T')[0]);
 
       // 1. Get current user
       const { data: authData } = await supabase.auth.getUser();
       const userId = authData.user?.id;
       if (!userId) throw new Error('No authenticated user');
 
-      // 2. Auto-complete deletion notes
-      const autoCompletedNotes = `${notes}\n\n${stageTitle} (Etapa ${stageNumber})\nEliminar Lead\nFecha: ${dateStr}\nHora: ${timeStr}\nIntentos: ${currentAttempts} de ${minAttempts}`;
+      // 2. Guardar comentario automático PRIMERO
+      const { error: autoNoteError } = await supabase
+        .from('lead_attempt_notes')
+        .insert({
+          lead_id: leadId,
+          stage_clave: stageClave,
+          stage_titulo: stageTitle,
+          attempt_number: currentAttempts,
+          note_type: 'deleted',
+          note_text: `${stageTitle} - Lead eliminado (Intentos: ${currentAttempts})\n\n${timestamp}`,
+        });
 
-      // 3. Use reusable delete archive function
+      if (autoNoteError) throw autoNoteError;
+
+      // 3. Guardar comentario del usuario DESPUÉS
+      const { error: noteError } = await supabase
+        .from('lead_attempt_notes')
+        .insert({
+          lead_id: leadId,
+          stage_clave: stageClave,
+          stage_titulo: stageTitle,
+          attempt_number: currentAttempts,
+          note_type: 'deleted',
+          note_text: `${notes.trim()}\n\n${timestamp}`,
+        });
+
+      if (noteError) throw noteError;
+
+      // 4. Use reusable delete archive function
       const result = await deleteLeadArchive({
         leadId,
         userId,
         stageClave,
         stageTitle,
         stageNumber,
-        reason: 'Límite de intentos alcanzado',
-        autoCompletedNotes,
+        reason: `Eliminado manualmente. ${notes.trim()}`,
+        autoCompletedNotes: `${notes.trim()}\n\n${timestamp}`,
       });
 
       if (!result.success) {
         throw new Error(result.error || 'Error archiving and deleting lead');
       }
+
+      // 5. Recargar datos del lead para actualizar el Kanban
+      onLeadUpdated?.();
 
       onSuccess();
     } catch (err: any) {

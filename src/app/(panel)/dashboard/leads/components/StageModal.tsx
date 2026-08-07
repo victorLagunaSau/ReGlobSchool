@@ -115,6 +115,7 @@ export default function StageModal({
 
   // Estado para agregar contactos generales
   const [showAddContactModal, setShowAddContactModal] = useState(false);
+  const [contactRefreshKey, setContactRefreshKey] = useState(0);
   const [newContactName, setNewContactName] = useState('');
   const [newContactCargo, setNewContactCargo] = useState('');
   const [newContactPhone, setNewContactPhone] = useState('');
@@ -459,6 +460,9 @@ export default function StageModal({
       setNewContactPhone('');
       setNewContactEmail('');
       setShowAddContactModal(false);
+
+      // Refrescar la lista de contactos incrementando la key
+      setContactRefreshKey(prev => prev + 1);
     } catch (err) {
       console.error('Error adding contact:', err);
       alert('Error al agregar contacto');
@@ -566,6 +570,7 @@ export default function StageModal({
                   onRegisterEmail={handleRegisterEmail}
                   isRegisteringCall={isRegisteringCall}
                   isRegisteringEmail={isRegisteringEmail}
+                  refreshKey={contactRefreshKey}
                 />
               )}
 
@@ -691,8 +696,13 @@ export default function StageModal({
                   leadId={leadId}
                   startDate={selectedDate}
                   notes={notes}
+                  onNotesChange={setNotes}
                   onSuccess={() => handleSuccess(true)}
+                  onCommentAdded={loadAttemptNotes}
+                  onLeadUpdated={onSuccess}
                   isSubmitting={isSubmitting}
+                  stageClave={currentStage.clave}
+                  stage={currentStage}
                 />
               )}
 
@@ -700,6 +710,7 @@ export default function StageModal({
                 <TipoContactoActions
                   leadId={leadId}
                   notes={notes}
+                  onNotesChange={setNotes}
                   minAttempts={currentStage.intentos_requeridos || 0}
                   maxAttempts={currentStage.limite_pospuestas || 0}
                   currentAttempts={currentAttempts}
@@ -709,6 +720,7 @@ export default function StageModal({
                   nextStageClave={nextStage?.clave}
                   nextStageTitle={nextStage?.titulo}
                   onSuccess={handleSuccess}
+                  onLeadUpdated={onSuccess}
                 />
               )}
 
@@ -824,7 +836,7 @@ export default function StageModal({
                           {note.note_type}
                         </span>
                       </div>
-                      <p className="text-[9px] text-slate-600 leading-relaxed">{note.note_text}</p>
+                      <p className="text-[9px] text-slate-600 leading-relaxed whitespace-pre-wrap">{note.note_text}</p>
                     </div>
                   ))}
                 </div>
