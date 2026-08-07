@@ -182,7 +182,6 @@ export default function CalendlyScheduler({
         <div className="border border-slate-200 rounded-lg shadow-sm overflow-hidden bg-white">
           <InlineWidget
             url={calendlyUrl}
-            onEventScheduled={handleEventScheduled}
             styles={{
               height: '700px',
             }}

@@ -283,7 +283,7 @@ export default function StageModal({
             </button>
           </div>
           <p className="text-sm text-slate-600">
-            Configuración no encontrada para la etapa: {stage.clave}
+            Configuración no encontrada para la etapa: {stage?.clave || currentStage?.clave}
           </p>
         </div>
       </div>
