@@ -195,6 +195,26 @@ export default function LeadInteractionHistory({ leadId, onRefresh }: LeadIntera
                             <span>{interaction.metadata.reason}</span>
                           </div>
                         )}
+                        {interaction.metadata.afinidad && (
+                          <div className="flex items-center gap-1">
+                            <span className="font-semibold text-slate-700">Afinidad:</span>
+                            <span>{interaction.metadata.afinidad}</span>
+                          </div>
+                        )}
+                        {interaction.metadata.responsable && (
+                          <div className="flex items-center gap-1">
+                            <span className="font-semibold text-slate-700">Responsable:</span>
+                            <span>{interaction.metadata.responsable}</span>
+                          </div>
+                        )}
+                        {interaction.metadata.fuente && (
+                          <div className="flex items-start gap-1 min-w-0">
+                            <span className="font-semibold text-slate-700 flex-shrink-0">Fuente:</span>
+                            <a href={interaction.metadata.fuente} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline truncate">
+                              {interaction.metadata.fuente}
+                            </a>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
