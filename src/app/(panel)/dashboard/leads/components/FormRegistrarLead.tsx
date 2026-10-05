@@ -2,8 +2,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../../../../lib/supabase/client';
-import { Loader2, X, Building2 } from 'lucide-react';
+import { Loader2, X, Building2, MessageSquareText, FileSpreadsheet, PenLine } from 'lucide-react';
 import type { Country, StateRow, ZoneRow } from '../page';
+import ImportCSV from './ImportCSV';
+import { saveInitialNote } from '../utils/initialNote';
 
 export interface LeadInitialData {
   business_name?: string;
@@ -15,6 +17,7 @@ export interface LeadInitialData {
   country_id?: string;
   state_id?: string;
   zone_id?: string;
+  notes?: string;
 }
 
 interface FormRegistrarLeadProps {
@@ -35,6 +38,8 @@ export default function FormRegistrarLead({ isOpen, onClose, countries, states, 
   const [email, setEmail] = useState('');
   const [address, setAddress] = useState('');
   const [website, setWebsite] = useState('');
+  const [notes, setNotes] = useState('');
+  const [mode, setMode] = useState<'manual' | 'csv'>('manual');
   const [selectedCountry, setSelectedCountry] = useState('MX');
   const [selectedState, setSelectedState] = useState('');
   const [selectedZone, setSelectedZone] = useState('');
@@ -65,12 +70,22 @@ export default function FormRegistrarLead({ isOpen, onClose, countries, states, 
     setEmail(initialData.email || '');
     setAddress(initialData.address || '');
     setWebsite(initialData.website || '');
+    setNotes(initialData.notes || '');
     if (initialData.country_id) setSelectedCountry(initialData.country_id);
     if (initialData.state_id) setSelectedState(initialData.state_id);
     if (initialData.zone_id) setSelectedZone(initialData.zone_id);
   }, [isOpen, initialData]);
 
   if (!isOpen) return null;
+
+  const handleClose = () => {
+    setMode('manual');
+    onClose();
+  };
+
+  // La importación masiva solo aplica al alta manual, no al convertir un
+  // resultado de búsqueda (que llega con initialData).
+  const canImport = !initialData;
 
   const filteredStates = states.filter((s) => s.country_id === selectedCountry);
   const filteredZones = zones.filter((z) => z.state_id === selectedState);
@@ -82,6 +97,7 @@ export default function FormRegistrarLead({ isOpen, onClose, countries, states, 
     setEmail('');
     setAddress('');
     setWebsite('');
+    setNotes('');
     setSelectedState('');
     setSelectedZone('');
   };
@@ -125,6 +141,8 @@ export default function FormRegistrarLead({ isOpen, onClose, countries, states, 
         status: 'pendiente',
       });
 
+      await saveInitialNote(newLead.id, notes, { origen: source });
+
       resetForm();
       onCreated();
       onClose();
@@ -137,18 +155,42 @@ export default function FormRegistrarLead({ isOpen, onClose, countries, states, 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
-      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-2xl w-full max-w-xl relative flex flex-col max-h-[95vh] overflow-y-auto animate-fade-in-up">
+      <div className={`bg-white border border-slate-200 rounded-2xl p-6 shadow-2xl w-full ${mode === 'csv' ? 'max-w-3xl' : 'max-w-xl'} relative flex flex-col max-h-[95vh] overflow-y-auto animate-fade-in-up`}>
 
         <div className="flex justify-between items-center pb-3 border-b border-slate-100 mb-4">
           <div>
             <h2 className="text-base font-black text-slate-950 tracking-tight">Nuevo Lead</h2>
-            <p className="text-[11px] text-slate-400">Alta manual de un prospecto comercial.</p>
+            <p className="text-[11px] text-slate-400">
+              {mode === 'csv' ? 'Carga masiva de prospectos desde un archivo CSV.' : 'Alta manual de un prospecto comercial.'}
+            </p>
           </div>
-          <button onClick={onClose} disabled={isSaving} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg">
+          <button onClick={handleClose} disabled={isSaving} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg">
             <X size={18} />
           </button>
         </div>
 
+        {canImport && (
+          <div className="flex gap-1 p-1 bg-slate-100 rounded-xl mb-4 self-start">
+            <button
+              type="button"
+              onClick={() => setMode('manual')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all ${mode === 'manual' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              <PenLine size={12} /> Manual
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('csv')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all ${mode === 'csv' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              <FileSpreadsheet size={12} /> Importar CSV
+            </button>
+          </div>
+        )}
+
+        {mode === 'csv' && canImport ? (
+          <ImportCSV states={states} statusClave={firstStageClave} onClose={handleClose} onImported={onCreated} />
+        ) : (
         <form onSubmit={handleCreateLead} className="space-y-4">
 
           <div className="border-t border-slate-100 pt-3 bg-slate-50/40 p-3 rounded-xl border border-slate-100 space-y-2">
@@ -216,13 +258,29 @@ export default function FormRegistrarLead({ isOpen, onClose, countries, states, 
             </div>
           </div>
 
+          <div className="border-t border-slate-100 pt-3 bg-amber-50/30 p-3 rounded-xl border border-amber-100/50 space-y-2">
+            <div className="flex items-center gap-1.5 text-amber-900 mb-1">
+              <MessageSquareText size={13} className="text-amber-500" />
+              <label className="block text-[11px] font-black uppercase tracking-wider">Comentarios (opcional)</label>
+            </div>
+            <textarea
+              rows={3}
+              placeholder="Ej. Distribuidora con varias sucursales que ya atiende listas escolares; podría sumar licencias digitales."
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className="w-full border border-slate-200 rounded-lg p-2 text-xs bg-white focus:outline-blue-600 resize-y"
+            />
+            <p className="text-[10px] text-slate-400">Se guarda como la primera nota en el historial del lead.</p>
+          </div>
+
           <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
-            <button type="button" onClick={onClose} disabled={isSaving} className="px-4 py-2 border rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-50">Cancelar</button>
+            <button type="button" onClick={handleClose} disabled={isSaving} className="px-4 py-2 border rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-50">Cancelar</button>
             <button type="submit" disabled={isSaving} className="px-5 py-2 bg-blue-600 text-white font-semibold rounded-lg text-xs hover:bg-blue-700 flex items-center gap-2">
               {isSaving ? <Loader2 size={14} className="animate-spin" /> : 'Guardar Lead'}
             </button>
           </div>
         </form>
+        )}
       </div>
     </div>
   );
